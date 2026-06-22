@@ -1,0 +1,173 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  LayoutDashboard,
+  FolderKanban,
+  Users,
+  User,
+  PenTool,
+  CalendarDays,
+  Settings,
+  Bell,
+  HelpCircle,
+  Shield,
+} from "lucide-react";
+import { toast } from "sonner";
+import { SidebarUserCard, TopbarUserMenu } from "@/components/sidebar-user-card";
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const navItems = [
+    { label: "Dashboard", href: "/dashboard/admin", icon: <LayoutDashboard size={16} /> },
+    { category: "PROJECTS" },
+    { label: "All Projects", href: "/dashboard/admin/projects", icon: <FolderKanban size={16} />, badge: "24" },
+    { category: "TEAM" },
+    { label: "All Members", href: "/dashboard/admin/team", icon: <Users size={16} />, badge: "8" },
+    { label: "Users", href: "/dashboard/admin/team/users", icon: <User size={16} />, badge: "5" },
+    { label: "Editors", href: "/dashboard/admin/team/editors", icon: <PenTool size={16} />, badge: "2" },
+    { category: "CALENDAR" },
+    { label: "Schedule & Deadlines", href: "/dashboard/admin/calendar", icon: <CalendarDays size={16} /> },
+  ];
+
+  return (
+    <div className="flex min-h-screen bg-zinc-50/50">
+      {/* Left Sidebar (bg-sidebar-bg) */}
+      <aside className="w-64 h-screen sticky top-0 bg-sidebar-bg flex flex-col justify-between p-6 shrink-0 select-none text-zinc-650 border-r border-sidebar-border">
+        <div className="space-y-8">
+          {/* Logo / Workspace name */}
+          <div className="flex flex-col px-1 select-none text-left">
+            <span className="font-extrabold text-lg tracking-tight text-sidebar-active-text block leading-none">
+              Admin Console
+            </span>
+            <span className="text-[10px] font-bold text-zinc-450 block mt-1 uppercase tracking-wider">
+              Acme Corp Active
+            </span>
+          </div>
+
+          {/* Navigation links */}
+          <nav className="space-y-1.5 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
+            {navItems.map((item, idx) => {
+              if (item.category) {
+                return (
+                  <span
+                    key={idx}
+                    className="text-[10px] font-extrabold text-zinc-450 uppercase tracking-widest px-3.5 pt-4 block first:pt-0"
+                  >
+                    {item.category}
+                  </span>
+                );
+              }
+
+              const isActive = pathname === item.href || (item.href !== "/dashboard/admin" && pathname?.startsWith(item.href!));
+              return (
+                <Link
+                  key={idx}
+                  href={item.href!}
+                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                    isActive
+                      ? "bg-sidebar-active-bg text-sidebar-active-text font-bold"
+                      : "text-zinc-600 hover:text-zinc-950 hover:bg-[#ebeeeb]/40"
+                  }`}
+                >
+                  <span className="flex items-center gap-3">
+                    {item.icon}
+                    {item.label}
+                  </span>
+                  {item.badge && (
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                      isActive ? "bg-[#d2e2cd] text-sidebar-active-text" : "bg-zinc-200/60 text-zinc-550"
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Workspace settings, notifications & profile */}
+        <div className="space-y-4 pt-4 border-t border-sidebar-border">
+          <nav className="space-y-1">
+            <Link
+              href="/dashboard/admin/workspace-settings"
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                pathname === "/dashboard/admin/workspace-settings"
+                  ? "bg-sidebar-active-bg text-sidebar-active-text font-bold"
+                  : "text-zinc-655 hover:text-zinc-950 hover:bg-[#ebeeeb]/40"
+              }`}
+            >
+              <Settings size={16} />
+              Workspace Settings
+            </Link>
+            <Link
+              href="/dashboard/admin/notifications"
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                pathname === "/dashboard/admin/notifications"
+                  ? "bg-sidebar-active-bg text-sidebar-active-text font-bold"
+                  : "text-zinc-655 hover:text-zinc-955 hover:bg-[#ebeeeb]/40"
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <Bell size={16} />
+                Notifications
+              </span>
+              <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                5
+              </span>
+            </Link>
+            <button
+              onClick={() => toast.info("Opening Help & Support panel...")}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-zinc-655 hover:text-zinc-955 text-left cursor-pointer hover:bg-[#ebeeeb]/40"
+            >
+              <HelpCircle size={16} />
+              Help & Support
+            </button>
+          </nav>
+
+          {/* User Profile Card */}
+          <SidebarUserCard />
+        </div>
+      </aside>
+
+      {/* Main Content Pane */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Topbar Navigation */}
+        <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-between shrink-0 select-none z-40">
+          <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+            <Shield size={14} className="text-brand-green" />
+            <span>ADMIN: Acme Corp</span>
+          </div>
+
+
+
+          <div className="flex items-center gap-4">
+            <Link
+              href="/dashboard/admin/notifications"
+              className="p-2 text-zinc-400 hover:text-zinc-600 transition-colors relative"
+            >
+              <Bell size={18} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+            </Link>
+            <TopbarUserMenu fallbackInitials="JD" />
+          </div>
+        </header>
+
+        {/* Subpage Children */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-zinc-50/50">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}

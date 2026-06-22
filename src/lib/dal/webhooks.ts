@@ -1,0 +1,144 @@
+import "server-only";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { webhookSecret } from "@/lib/env";
+
+// Webhooks run without a user session, so all DB work here uses the service-role
+// client. Authenticity is established by a shared-secret header (when configured).
+
+export function verifyWebhook(request: Request): boolean {
+  const expected = webhookSecret();
+  if (!expected) return true; // no secret configured → accept (dev mode)
+  const provided =
+    request.headers.get("x-webhook-secret") ||
+    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  return provided === expected;
+}
+
+const STAGE_PROGRESS_WEIGHTS = 7; // pipeline stages
+
+async function recomputeProgress(projectId: string) {
+  const admin = createAdminClient();
+  const { data: stages } = await admin
+    .from("project_stages")
+    .select("status")
+    .eq("project_id", projectId);
+  const completed = (stages ?? []).filter((s) => s.status === "completed").length;
+  await admin
+    .from("projects")
+    .update({ progress_percent: Math.round((completed / STAGE_PROGRESS_WEIGHTS) * 100) })
+    .eq("id", projectId);
+}
+
+async function markStage(
+  projectId: string,
+  stage: "voice" | "video" | "publish",
+  status: "completed" | "failed",
+) {
+  const admin = createAdminClient();
+  await admin
+    .from("project_stages")
+    .update({
+      status,
+      completed_at: status === "completed" ? new Date().toISOString() : null,
+    })
+    .eq("project_id", projectId)
+    .eq("stage_name", stage);
+  await recomputeProgress(projectId);
+}
+
+export async function completeVideoByJob(
+  providerJobId: string,
+  status: "completed" | "failed",
+  videoUrl?: string,
+  error?: string,
+): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: row } = await admin
+    .from("video_generations")
+    .select("*")
+    .eq("provider_job_id", providerJobId)
+    .limit(1)
+    .single();
+  if (!row) return false;
+
+  await admin
+    .from("video_generations")
+    .update({
+      status,
+      video_url: status === "completed" ? videoUrl ?? null : null,
+      error: status === "failed" ? error ?? "Generation failed" : null,
+    })
+    .eq("id", row.id);
+
+  await markStage(row.project_id, "video", status);
+  if (status === "completed") {
+    await admin
+      .from("projects")
+      .update({ status: "editing", video_url: videoUrl ?? null })
+      .eq("id", row.project_id);
+  }
+  return true;
+}
+
+export async function completeVoiceByJob(
+  providerJobId: string,
+  status: "completed" | "failed",
+  audioUrl?: string,
+  durationSeconds?: number,
+  error?: string,
+): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: row } = await admin
+    .from("voice_generations")
+    .select("*")
+    .eq("provider_job_id", providerJobId)
+    .limit(1)
+    .single();
+  if (!row) return false;
+
+  await admin
+    .from("voice_generations")
+    .update({
+      status,
+      audio_url: status === "completed" ? audioUrl ?? null : null,
+      duration: durationSeconds ?? null,
+      error: status === "failed" ? error ?? "Generation failed" : null,
+    })
+    .eq("id", row.id);
+
+  await markStage(row.project_id, "voice", status);
+  return true;
+}
+
+export async function completePublishByJob(
+  providerJobId: string,
+  status: "completed" | "failed",
+  platformVideoId?: string,
+  error?: string,
+): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: row } = await admin
+    .from("publishing_tasks")
+    .select("*")
+    .eq("provider_job_id", providerJobId)
+    .limit(1)
+    .single();
+  if (!row) return false;
+
+  await admin
+    .from("publishing_tasks")
+    .update({
+      status: status === "completed" ? "published" : "failed",
+      published_at: status === "completed" ? new Date().toISOString() : null,
+      platform_video_id: platformVideoId ?? null,
+      error: status === "failed" ? error ?? "Publish failed" : null,
+    })
+    .eq("id", row.id);
+
+  if (status === "completed") {
+    await markStage(row.project_id, "publish", "completed");
+    await admin.from("projects").update({ status: "published" }).eq("id", row.project_id);
+  }
+  return true;
+}
