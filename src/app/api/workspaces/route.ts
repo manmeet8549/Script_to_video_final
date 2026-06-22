@@ -12,6 +12,11 @@ export async function GET() {
 
 const createSchema = z.object({
   name: z.string().min(1, "Workspace name is required").max(120),
+  slug: z
+    .string()
+    .max(60)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be lowercase kebab-case")
+    .optional(),
   description: z.string().max(2000).optional(),
   subscription_tier: z.string().max(50).optional(),
 });

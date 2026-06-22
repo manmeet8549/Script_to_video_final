@@ -1,10 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getUser } from "@/lib/dal/auth";
 import { listMembers, type MemberWithProfile } from "@/lib/dal/members";
 import { listProjects } from "@/lib/dal/projects";
-import { uniqueSlug } from "@/lib/utils/slug";
+import { slugify, uniqueSlug } from "@/lib/utils/slug";
 import type { Project, Workspace, WorkspaceMember } from "@/types/db";
 
 export type WorkspaceWithRole = Workspace & { role: WorkspaceMember["role"] };
@@ -44,6 +45,17 @@ export async function listWorkspaces(): Promise<WorkspaceWithRole[]> {
     ...ws,
     role: roleByWs.get(ws.id) as WorkspaceMember["role"],
   }));
+}
+
+// Whether a workspace slug is free. Checked with the service-role client so the
+// answer reflects ALL workspaces (a slug may belong to one the caller can't see
+// under RLS). The slug is a global unique key, so this is a safe trusted read.
+export async function isSlugAvailable(rawSlug: string): Promise<{ available: boolean; normalized: string }> {
+  const normalized = slugify(rawSlug);
+  if (!normalized) return { available: false, normalized };
+  const admin = createAdminClient();
+  const { data } = await admin.from("workspaces").select("id").eq("slug", normalized).maybeSingle();
+  return { available: !data, normalized };
 }
 
 export async function getWorkspace(id: string): Promise<Workspace | null> {
