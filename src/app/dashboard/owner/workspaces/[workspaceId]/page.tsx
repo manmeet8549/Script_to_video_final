@@ -102,10 +102,9 @@ export default function OwnerWorkspaceDetailPage() {
     try {
       await api.post("/api/workspaces/active", { workspace_id: workspaceId });
       toast.success("Switched to this workspace.");
-      router.refresh();
+      router.push("/dashboard/admin");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to switch workspace.");
-    } finally {
       setSwitching(false);
     }
   };

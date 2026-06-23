@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Clapperboard,
-  PlusCircle,
   Share2,
   Upload,
   Bell,
@@ -16,24 +15,27 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarUserCard } from "@/components/sidebar-user-card";
+import { api } from "@/lib/api/client";
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    type Notification = { is_read: boolean };
+    api.get<Notification[]>("/api/notifications")
+      .then((notifs) => setUnreadCount(notifs.filter((n) => !n.is_read).length))
+      .catch(() => {});
+  }, [pathname]);
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard/user", icon: <LayoutDashboard size={16} /> },
     { category: "CREATIVE PIPELINE" },
     { label: "Script Gen", href: "/dashboard/user/projects", icon: <Sparkles size={16} /> },
-    { label: "Voiceover", href: "/dashboard/user/projects", icon: <Clapperboard size={16} /> }, // Using Clapperboard / generic icons
+    { label: "Voiceover", href: "/dashboard/user/projects", icon: <Clapperboard size={16} /> },
     { label: "Video Studio", href: "/dashboard/user/projects", icon: <Clapperboard size={16} /> },
     { category: "DISTRIBUTION" },
-    { label: "Publishing Hub", href: "/dashboard/user/publish", icon: <Share2 size={16} />, badge: "4" },
+    { label: "Publishing Hub", href: "/dashboard/user/publish", icon: <Share2 size={16} /> },
     { label: "Upload & Publish", href: "/dashboard/user/publish/upload", icon: <Upload size={16} /> },
   ];
 
@@ -81,13 +83,6 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
                     {item.icon}
                     {item.label}
                   </span>
-                  {item.badge && (
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                      isActive ? "bg-[#d2e2cd] text-sidebar-active-text" : "bg-zinc-200/60 text-zinc-550"
-                    }`}>
-                      {item.badge}
-                    </span>
-                  )}
                 </Link>
               );
             })}
@@ -120,9 +115,11 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
                 <Bell size={16} />
                 Notifications
               </span>
-              <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
-                3
-              </span>
+              {unreadCount !== null && unreadCount > 0 && (
+                <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                  {unreadCount}
+                </span>
+              )}
             </Link>
             <button
               onClick={() => toast.info("Opening Help & Support panel...")}
@@ -192,7 +189,9 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
               title="Notifications"
             >
               <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount !== null && unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              )}
             </Link>
             <Link
               href="/dashboard/user/settings"

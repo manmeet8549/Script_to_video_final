@@ -1,18 +1,51 @@
 "use client";
 
 import { useState } from "react";
-import { Settings, Shield, Server, HardDrive, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, Loader2, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AdminWorkspaceSettingsPage() {
   const [workspaceName, setWorkspaceName] = useState("Acme Corp");
   const [domainRestriction, setDomainRestriction] = useState("acmecorp.com");
-  const [storageUsage, setStorageUsage] = useState(82); // 82%
-  const [creditBalance, setCreditBalance] = useState(450); // credits
+  const [storageUsage] = useState(82);
+  const [creditBalance] = useState(450);
+
+  // Password change
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [isChangingPw, setIsChangingPw] = useState(false);
 
   const handleSaveWorkspaceSettings = (e: React.FormEvent) => {
     e.preventDefault();
     toast.success("Workspace settings updated successfully!");
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+    setIsChangingPw(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setNewPassword("");
+      setConfirmPassword("");
+      toast.success("Password updated successfully!");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update password.");
+    } finally {
+      setIsChangingPw(false);
+    }
   };
 
   return (
@@ -87,6 +120,86 @@ export default function AdminWorkspaceSettingsPage() {
                 className="h-11 px-6 bg-brand-green hover:bg-brand-green-hover text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-brand-green/10 active:scale-[0.98] cursor-pointer"
               >
                 Save Properties
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Security — Password Change */}
+        <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
+          <form onSubmit={handleChangePassword} className="space-y-6 text-left">
+            <div className="flex items-center gap-2 border-b border-zinc-150 pb-2.5">
+              <Shield size={14} className="text-brand-green" />
+              <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide">
+                Security — Change Password
+              </h3>
+            </div>
+
+            <p className="text-xs font-semibold text-zinc-500">
+              Update the password for your admin account. Applies to all roles (owner, admin, user, editor) who visit this page.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide block">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPw ? "text" : "password"}
+                    minLength={8}
+                    required
+                    placeholder="Min. 8 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-4 pr-10 h-11 border border-zinc-200 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 rounded-xl text-sm font-semibold text-zinc-900 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPw((v) => !v)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                  >
+                    {showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide block">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPw ? "text" : "password"}
+                    minLength={8}
+                    required
+                    placeholder="Repeat new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full pl-4 pr-10 h-11 border border-zinc-200 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 rounded-xl text-sm font-semibold text-zinc-900 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPw((v) => !v)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                  >
+                    {showConfirmPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={isChangingPw}
+                className="h-11 px-6 bg-brand-green hover:bg-brand-green-hover disabled:bg-brand-green/60 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-brand-green/10 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+              >
+                {isChangingPw ? (
+                  <><Loader2 size={13} className="animate-spin" /> Updating...</>
+                ) : (
+                  "Update Password"
+                )}
               </button>
             </div>
           </form>

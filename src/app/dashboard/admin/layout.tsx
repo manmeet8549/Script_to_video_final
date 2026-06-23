@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -17,24 +17,52 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarUserCard, TopbarUserMenu } from "@/components/sidebar-user-card";
+import { api } from "@/lib/api/client";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
+  const [projectsCount, setProjectsCount] = useState<number | null>(null);
+  const [membersCount, setMembersCount] = useState<number | null>(null);
+  const [usersCount, setUsersCount] = useState<number | null>(null);
+  const [editorsCount, setEditorsCount] = useState<number | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    const fetchCounts = async () => {
+      try {
+        type Member = { role: string };
+        type Project = { id: string };
+        type Workspace = { name: string };
+        type Notification = { is_read: boolean };
+        const [members, projects, workspaces, notifs] = await Promise.all([
+          api.get<Member[]>("/api/members").catch(() => [] as Member[]),
+          api.get<Project[]>("/api/projects").catch(() => [] as Project[]),
+          api.get<Workspace[]>("/api/workspaces").catch(() => [] as Workspace[]),
+          api.get<Notification[]>("/api/notifications").catch(() => [] as Notification[]),
+        ]);
+        setMembersCount(members.length);
+        setUsersCount(members.filter((m) => m.role === "user").length);
+        setEditorsCount(members.filter((m) => m.role === "editor").length);
+        setProjectsCount(projects.length);
+        setUnreadCount(notifs.filter((n) => !n.is_read).length);
+        if (workspaces.length > 0) setWorkspaceName(workspaces[0].name);
+      } catch {
+        // Fail silently — counts just won't render
+      }
+    };
+
+    fetchCounts();
+  }, [pathname]);
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard/admin", icon: <LayoutDashboard size={16} /> },
     { category: "PROJECTS" },
-    { label: "All Projects", href: "/dashboard/admin/projects", icon: <FolderKanban size={16} />, badge: "24" },
+    { label: "All Projects", href: "/dashboard/admin/projects", icon: <FolderKanban size={16} />, badge: projectsCount !== null ? String(projectsCount) : undefined },
     { category: "TEAM" },
-    { label: "All Members", href: "/dashboard/admin/team", icon: <Users size={16} />, badge: "8" },
-    { label: "Users", href: "/dashboard/admin/team/users", icon: <User size={16} />, badge: "5" },
-    { label: "Editors", href: "/dashboard/admin/team/editors", icon: <PenTool size={16} />, badge: "2" },
+    { label: "All Members", href: "/dashboard/admin/team", icon: <Users size={16} />, badge: membersCount !== null ? String(membersCount) : undefined },
+    { label: "Users", href: "/dashboard/admin/team/users", icon: <User size={16} />, badge: usersCount !== null ? String(usersCount) : undefined },
+    { label: "Editors", href: "/dashboard/admin/team/editors", icon: <PenTool size={16} />, badge: editorsCount !== null ? String(editorsCount) : undefined },
     { category: "CALENDAR" },
     { label: "Schedule & Deadlines", href: "/dashboard/admin/calendar", icon: <CalendarDays size={16} /> },
   ];
@@ -50,7 +78,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               Admin Console
             </span>
             <span className="text-[10px] font-bold text-zinc-450 block mt-1 uppercase tracking-wider">
-              Acme Corp Active
+              {workspaceName ?? "Loading..."}
             </span>
           </div>
 
@@ -122,9 +150,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <Bell size={16} />
                 Notifications
               </span>
-              <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
-                5
-              </span>
+              {unreadCount !== null && unreadCount > 0 && (
+                <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                  {unreadCount}
+                </span>
+              )}
             </Link>
             <button
               onClick={() => toast.info("Opening Help & Support panel...")}
@@ -146,10 +176,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-between shrink-0 select-none z-40">
           <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
             <Shield size={14} className="text-brand-green" />
-            <span>ADMIN: Acme Corp</span>
+            <span>ADMIN{workspaceName ? `: ${workspaceName}` : ""}</span>
           </div>
-
-
 
           <div className="flex items-center gap-4">
             <Link
@@ -157,7 +185,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className="p-2 text-zinc-400 hover:text-zinc-600 transition-colors relative"
             >
               <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount !== null && unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              )}
             </Link>
             <TopbarUserMenu fallbackInitials="JD" />
           </div>

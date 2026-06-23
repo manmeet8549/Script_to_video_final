@@ -4,11 +4,13 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { primaryRole } from "@/lib/auth/roles";
+import { ACTIVE_WORKSPACE_COOKIE, primaryRole } from "@/lib/auth/roles";
 import type { Profile, WorkspaceMember, WorkspaceRole } from "@/types/db";
 import type { User } from "@supabase/supabase-js";
 
-export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
+// Re-exported from the shared (client-safe) roles module so existing importers
+// of `@/lib/dal/auth` keep working.
+export { ACTIVE_WORKSPACE_COOKIE };
 
 // Validated auth user for the current request (deduped per render pass).
 export const getUser = cache(async (): Promise<User | null> => {
@@ -38,6 +40,21 @@ export const getMemberships = cache(async (): Promise<WorkspaceMember[]> => {
     .eq("user_id", user.id)
     .eq("status", "active");
   return data ?? [];
+});
+
+// Whether the user has at least one membership that is not yet active (an
+// invitation they haven't accepted). Used to tell a freshly-invited member
+// apart from a brand-new platform owner who has no memberships at all.
+export const hasPendingMembership = cache(async (): Promise<boolean> => {
+  const user = await getUser();
+  if (!user) return false;
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("workspace_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .neq("status", "active");
+  return (count ?? 0) > 0;
 });
 
 // Resolve the "current" workspace: the cookie-selected one if the user still

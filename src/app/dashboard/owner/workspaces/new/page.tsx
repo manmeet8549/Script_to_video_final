@@ -705,6 +705,7 @@ function SuccessOverlay({
   onCreateAnother: () => void;
 }) {
   const url = `${info.workspace.slug}.workspace.uchat.com`;
+  const acceptUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/auth/accept-invite?email=${encodeURIComponent(info.email)}&workspace=${encodeURIComponent(info.workspace.name)}&role=Administrator`;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl max-w-md w-full p-8 text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
@@ -731,7 +732,25 @@ function SuccessOverlay({
             <CheckCircle2 size={16} className="text-brand-green shrink-0" />
             <span className="font-semibold text-zinc-600 truncate">{info.email}</span>
           </div>
-          <p className="text-xs font-semibold text-zinc-400">Invitation sent — expires in 7 days.</p>
+
+          {/* Accept-invite link — share this with the admin so they know where to go */}
+          <div className="space-y-1">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-zinc-400">
+              Invitation link (share with admin)
+            </p>
+            <div className="flex items-center justify-between gap-2 bg-white border border-zinc-200 rounded-lg px-3 py-2">
+              <code className="text-xs font-mono text-zinc-700 truncate">{acceptUrl}</code>
+              <button
+                type="button"
+                onClick={() => onCopy(acceptUrl, "Invitation link")}
+                className="text-zinc-400 hover:text-brand-green transition-colors shrink-0"
+              >
+                <Copy size={14} />
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold text-zinc-400">Expires in 7 days.</p>
 
           {info.invite.tempPassword && (
             <div className="border-t border-zinc-150 pt-3 space-y-1.5">

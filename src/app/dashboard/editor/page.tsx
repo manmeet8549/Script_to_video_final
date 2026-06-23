@@ -1,296 +1,284 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
-  Clock,
-  Play,
-  FileCheck,
+  ArrowRight,
   CheckCircle,
-  Bell,
-  HelpCircle,
-  Search,
-  Settings,
-  MoreVertical,
+  Clock,
+  Loader2,
   Star,
   Trophy,
-  X,
-  Check,
-  Calendar,
-  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getStoredProjects, updateStoredProject, UserProject } from "../../utils/storage";
+import { api, ApiError } from "@/lib/api/client";
+import type { Notification, Project } from "@/types/db";
+
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function fmtDeadline(iso: string | null): string {
+  if (!iso) return "No deadline";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const PRIORITY_COLORS: Record<Project["priority"], string> = {
+  urgent: "bg-red-50 text-red-700 border-red-100",
+  high: "bg-red-50 text-red-700 border-red-100",
+  medium: "bg-amber-50 text-amber-700 border-amber-100",
+  low: "bg-zinc-50 text-zinc-700 border-zinc-100",
+};
 
 export default function EditorDashboardPage() {
   const router = useRouter();
 
-  const [projects, setProjects] = useState<UserProject[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setProjects(getStoredProjects());
-    setLoading(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [projData, notifData] = await Promise.all([
+        api.get<Project[]>("/api/projects"),
+        api.get<Notification[]>("/api/notifications"),
+      ]);
+      setProjects(projData);
+      setNotifications(notifData);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to load dashboard.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const pendingProjects = projects.filter(p => p.stage === "Video Editing");
-  const inProgressProjects = projects.filter(p => p.stage === "Editing");
-  const underReviewProjects = projects.filter(p => p.stage === "Under Review");
-  const completedProjects = projects.filter(p => p.status === "Completed");
+  useEffect(() => {
+    void (async () => { await load(); })();
+  }, [load]);
 
-  const pendingCount = pendingProjects.length;
-  const inProgressCount = inProgressProjects.length;
-  const underReviewCount = underReviewProjects.length;
-  const completedCount = completedProjects.length;
+  const editingTasks = projects.filter((p) => p.status === "editing");
+  const reviewTasks = projects.filter((p) => p.status === "review");
+  const completedTasks = projects.filter((p) => p.status === "published");
 
-  const handleAcceptRequest = (id: string, name: string) => {
-    updateStoredProject(id, { stage: "Editing", progress: 85, lastUpdated: "Just now" });
-    setProjects(getStoredProjects());
-    toast.success(`Request accepted and moved to In Progress: "${name}"`);
-  };
+  const recentActivity = notifications.slice(0, 5);
 
-  const handleDeclineRequest = (id: string, name: string) => {
-    updateStoredProject(id, { editMethod: null, stage: "Idea Selection", lastUpdated: "Just now" });
-    setProjects(getStoredProjects());
-    toast.info(`Request declined: "${name}"`);
-  };
-
-  const handleCardTitleClick = (id: string) => {
-    router.push(`/dashboard/editor/tasks/${id}/edit`);
-  };
-
-  const getProjectTag = (p: UserProject) => {
-    if (p.id === "req-1") return "AI Editing";
-    if (p.id === "req-2") return "Color Grading";
-    if (p.id === "req-3") return "Motion Graphics";
-    return p.stylePreset || "Video Editing";
-  };
-
-  const getProjectTagBg = (p: UserProject) => {
-    if (p.id === "req-1") return "bg-emerald-50 text-brand-green border-emerald-100";
-    if (p.id === "req-2") return "bg-purple-50 text-purple-700 border-purple-100";
-    if (p.id === "req-3") return "bg-amber-50 text-amber-700 border-amber-100";
-    
-    if (p.priority === "High") return "bg-red-50 text-red-700 border-red-100";
-    if (p.priority === "Medium") return "bg-amber-50 text-amber-700 border-amber-100";
-    return "bg-zinc-50 text-zinc-750 border-zinc-100";
-  };
-
-  const requests = pendingProjects.map(p => ({
-    id: p.id,
-    name: p.name,
-    from: p.creator || "Sarah Johnson",
-    tag: getProjectTag(p),
-    tagBg: getProjectTagBg(p).split(" ")[0],
-    tagText: getProjectTagBg(p).split(" ").slice(1).join(" "),
-    deadline: p.dueDate || "Jun 25, 5:00 PM",
-  }));
-
-  // Weekly Completion Chart Data
-  const weeklyData = [
-    { day: "Mon", count: 4, height: 40 },
-    { day: "Tue", count: 6, height: 60 },
-    { day: "Wed", count: 8, height: 80 },
-    { day: "Thu", count: 5, height: 50 },
-    { day: "Fri", count: 9, height: 90 },
-    { day: "Sat", count: 2, height: 20 },
-    { day: "Sun", count: 1, height: 10 },
-  ];
+  if (loading) {
+    return (
+      <main className="flex-1 flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-brand-green" />
+      </main>
+    );
+  }
 
   return (
-    <>
-      {/* Dashboard Body */}
-      <main className="flex-1 overflow-y-auto px-8 py-8">
-        <div className="max-w-5xl mx-auto space-y-8">
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
-            <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 text-left">
-              Dashboard Overview
-            </h1>
+    <main className="flex-1 overflow-y-auto px-8 py-8">
+      <div className="max-w-5xl mx-auto space-y-8">
+        <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+          <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 text-left">
+            Dashboard Overview
+          </h1>
+          <button
+            onClick={load}
+            className="text-xs font-bold text-brand-green hover:underline cursor-pointer"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {/* KPI Cards Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { label: "In Progress", val: editingTasks.length, icon: "⏳", color: "text-amber-500 bg-amber-50/50" },
+            { label: "Under Review", val: reviewTasks.length, icon: "📝", color: "text-zinc-500 bg-zinc-50" },
+            { label: "Completed", val: completedTasks.length, icon: "✅", color: "text-emerald-500 bg-emerald-50/50" },
+            { label: "Notifications", val: notifications.filter((n) => !n.is_read).length, icon: "🔔", color: "text-blue-500 bg-blue-50/50" },
+          ].map((kpi, idx) => (
+            <div
+              key={idx}
+              className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between"
+            >
+              <div className="space-y-1 text-left">
+                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">
+                  {kpi.label}
+                </span>
+                <span className="text-3xl font-extrabold text-zinc-955 block mt-1 tracking-tight">
+                  {kpi.val}
+                </span>
+              </div>
+              <div className={`w-10 h-10 rounded-xl border border-zinc-150/45 flex items-center justify-center text-lg shadow-3xs select-none ${kpi.color}`}>
+                {kpi.icon}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Split Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Active Tasks */}
+          <div className="lg:col-span-7 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-5">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-2.5 select-none">
+              <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide">
+                Active Tasks
+              </h3>
+              <button
+                onClick={() => router.push("/dashboard/editor/tasks")}
+                className="text-xs font-bold text-brand-green hover:underline cursor-pointer"
+              >
+                View All
+              </button>
+            </div>
+
+            {editingTasks.length === 0 ? (
+              <div className="py-12 text-center">
+                <CheckCircle size={32} className="text-brand-green mx-auto mb-2" />
+                <p className="text-sm font-bold text-zinc-600">No active editing tasks.</p>
+                <p className="text-xs font-semibold text-zinc-400 mt-1">
+                  Check back when new projects are assigned.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {editingTasks.slice(0, 4).map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => router.push(`/dashboard/editor/tasks/${p.id}/edit`)}
+                    className="border border-zinc-150 rounded-2xl p-5 hover:border-zinc-350 hover:shadow-2xs transition-all text-left space-y-3 cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <span className={`inline-block px-1.5 py-0.5 border rounded text-[9px] font-extrabold ${PRIORITY_COLORS[p.priority]}`}>
+                          {p.priority.toUpperCase()}
+                        </span>
+                        <h4 className="text-xs font-extrabold text-zinc-900 leading-tight block pt-0.5">
+                          {p.title}
+                        </h4>
+                      </div>
+                      <span className="text-[10px] font-semibold text-zinc-400 shrink-0">
+                        {fmtDeadline(p.deadline)}
+                      </span>
+                    </div>
+
+                    {p.progress_percent > 0 && (
+                      <div className="space-y-1 select-none">
+                        <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                          <div
+                            style={{ width: `${p.progress_percent}%` }}
+                            className="h-full bg-brand-green rounded-full"
+                          />
+                        </div>
+                        <div className="flex justify-between text-[9px] font-bold text-zinc-400">
+                          <span>Progress</span>
+                          <span>{p.progress_percent}%</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end pt-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/dashboard/editor/tasks/${p.id}/edit`);
+                        }}
+                        className="h-8 px-4 bg-brand-green hover:bg-brand-green-hover text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        Open Editor <ArrowRight size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* KPI Cards Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { label: "Pending", val: pendingCount, icon: "📁", color: "text-red-500 bg-red-50/50" },
-              { label: "In Progress", val: inProgressCount, icon: "⏳", color: "text-amber-500 bg-amber-50/50" },
-              { label: "Under Review", val: underReviewCount, icon: "📝", color: "text-zinc-500 bg-zinc-50" },
-              { label: "Completed", val: completedCount, icon: "✅", color: "text-emerald-500 bg-emerald-50/50" },
-            ].map((kpi, idx) => (
-              <div
-                key={idx}
-                className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between"
-              >
-                <div className="space-y-1 text-left">
-                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">
-                    {kpi.label}
+          {/* Right Column: Performance + Activity */}
+          <div className="lg:col-span-5 space-y-6">
+            {/* Performance Scorecard */}
+            <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-5 select-none text-left">
+              <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide border-b border-zinc-100 pb-2">
+                My Performance
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-zinc-50 border border-zinc-150 rounded-xl p-3.5">
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide block">
+                    Tasks in Queue
                   </span>
-                  <span className="text-3xl font-extrabold text-zinc-955 block mt-1 tracking-tight">
-                    {kpi.val}
+                  <span className="text-base font-extrabold text-zinc-850 block mt-1">
+                    {editingTasks.length + reviewTasks.length}
                   </span>
                 </div>
-                <div className={`w-10 h-10 rounded-xl border border-zinc-150/45 flex items-center justify-center text-lg shadow-3xs select-none ${kpi.color}`}>
-                  {kpi.icon}
+                <div className="bg-zinc-50 border border-zinc-150 rounded-xl p-3.5">
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide block">
+                    Completed
+                  </span>
+                  <span className="text-base font-extrabold text-zinc-850 block mt-1">
+                    {completedTasks.length}
+                  </span>
                 </div>
               </div>
-            ))}
-          </div>
 
-          {/* Split Section: Requests (60%) vs Performance (40%) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Column: Requests */}
-            <div className="lg:col-span-7 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-5">
-              <div className="flex justify-between items-center border-b border-zinc-100 pb-2.5 select-none">
+              <div className="flex items-center justify-between p-3.5 bg-zinc-50 border border-zinc-150 rounded-xl">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase block">Rating</span>
+                  <div className="flex items-center gap-1 pt-0.5">
+                    <span className="text-base font-extrabold text-zinc-850 mr-1">4.8</span>
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} size={11} fill="#eab308" className="text-yellow-500" />
+                    ))}
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-500">
+                  <Trophy size={16} />
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Notifications */}
+            <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
                 <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide">
-                  New Requests
+                  Recent Activity
                 </h3>
                 <button
-                  onClick={() => toast.info("Displaying all pending editor requests...")}
+                  onClick={() => router.push("/dashboard/editor/notifications")}
                   className="text-xs font-bold text-brand-green hover:underline cursor-pointer"
                 >
                   View All
                 </button>
               </div>
 
-              {requests.length === 0 ? (
-                <div className="py-16 text-center text-zinc-400 text-xs font-bold">
-                  🎉 All pending requests accepted!
-                </div>
+              {recentActivity.length === 0 ? (
+                <p className="text-xs font-semibold text-zinc-400 py-4 text-center">No recent activity.</p>
               ) : (
-                <div className="space-y-4">
-                  {requests.map((req) => (
-                    <div
-                      key={req.id}
-                      className="border border-zinc-150 rounded-2xl p-5 hover:border-zinc-350 hover:shadow-2xs transition-all text-left space-y-3.5"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1.5">
-                          <span className="inline-block px-1.5 py-0.5 bg-red-50 text-red-750 border border-red-100 rounded text-[9px] font-extrabold select-none">
-                            NEW REQUEST
-                          </span>
-                          <h4
-                            onClick={() => handleCardTitleClick(req.id)}
-                            className="text-xs font-extrabold text-zinc-955 hover:text-brand-green cursor-pointer transition-colors block leading-tight pt-1"
-                          >
-                            {req.name}
-                          </h4>
-                          <span className="text-[10px] font-semibold text-zinc-400 block">
-                            From: {req.from} •{" "}
-                            <span className={`px-1.5 py-0.25 border rounded text-[9px] font-extrabold ${req.tagBg} ${req.tagText}`}>
-                              {req.tag}
-                            </span>
-                          </span>
-                        </div>
-                        
-                        <span className="text-[10px] font-bold text-zinc-400 flex items-center gap-1 shrink-0 select-none">
-                          <Calendar size={12} />
-                          {req.deadline}
-                        </span>
+                <div className="space-y-3 text-left">
+                  {recentActivity.map((n) => (
+                    <div key={n.id} className="flex items-start gap-3">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border ${
+                        n.is_read ? "bg-zinc-50 border-zinc-200" : "bg-brand-green-light border-brand-green/20"
+                      }`}>
+                        <Clock size={12} className={n.is_read ? "text-zinc-400" : "text-brand-green"} />
                       </div>
-
-                      {/* Accept / Decline actions */}
-                      <div className="flex items-center gap-2 pt-1 select-none">
-                        <button
-                          onClick={() => handleAcceptRequest(req.id, req.name)}
-                          className="h-8 px-4 bg-brand-green hover:bg-brand-green-hover text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-[0.98]"
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={() => handleDeclineRequest(req.id, req.name)}
-                          className="h-8 px-4 border border-zinc-200 hover:bg-zinc-50 text-zinc-707 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          Decline
-                        </button>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-zinc-900 truncate">{n.title}</h4>
+                        <span className="text-[9px] font-semibold text-zinc-400 block mt-0.5">
+                          {relTime(n.created_at)}
+                        </span>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
-            {/* Right Column: Performance Scorecard */}
-            <div className="lg:col-span-5 space-y-6">
-              {/* Scorecards */}
-              <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-5 select-none text-left">
-                <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide border-b border-zinc-100 pb-2">
-                  My Performance
-                </h3>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-zinc-50 border border-zinc-150 rounded-xl p-3.5">
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide block">
-                      Avg Turnaround
-                    </span>
-                    <span className="text-base font-extrabold text-zinc-850 block mt-1">
-                      4.2 hrs
-                    </span>
-                  </div>
-                  <div className="bg-zinc-50 border border-zinc-150 rounded-xl p-3.5">
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide block">
-                      Tasks This Week
-                    </span>
-                    <span className="text-base font-extrabold text-zinc-850 block mt-1">
-                      12
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3.5 bg-zinc-50 border border-zinc-150 rounded-xl">
-                  <div className="space-y-1">
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase block">
-                      Current Rating
-                    </span>
-                    <div className="flex items-center gap-1 pt-0.5">
-                      <span className="text-base font-extrabold text-zinc-850 mr-1">4.8</span>
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} size={11} fill="#eab308" className="text-yellow-500" />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="w-8.5 h-8.5 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-500 shadow-3xs">
-                    <Trophy size={16} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Completion line chart */}
-              <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-4 select-none">
-                <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide border-b border-zinc-100 pb-2 text-left">
-                  Tasks Completed (This Week)
-                </h3>
-
-                {/* SVG Line / Bar visualization */}
-                <div className="h-28 flex items-end justify-between px-2 pt-4 relative">
-                  {/* Graph grid lines */}
-                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none text-[8px] font-bold text-zinc-200 text-left pl-1 pb-1">
-                    <span className="border-b border-zinc-100/50 w-full" />
-                    <span className="border-b border-zinc-100/50 w-full" />
-                    <span className="border-b border-zinc-100/50 w-full" />
-                  </div>
-
-                  {/* Weekly bars */}
-                  <div className="flex-1 flex items-end justify-around relative z-10 h-full pb-0.5">
-                    {weeklyData.map((d, idx) => (
-                      <div key={idx} className="flex flex-col items-center gap-1.5 group cursor-pointer">
-                        <div
-                          style={{ height: `${d.height}%` }}
-                          className="w-5.5 bg-brand-green/80 hover:bg-brand-green transition-all rounded-t-[3px] shadow-3xs"
-                          title={`${d.count} completed`}
-                        />
-                        <span className="text-[9px] font-bold text-zinc-400">
-                          {d.day}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
-      </main>
-    </>
+      </div>
+    </main>
   );
 }

@@ -14,6 +14,8 @@ export async function GET() {
 const inviteSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "user", "editor", "support", "viewer"]),
+  full_name: z.string().max(120).optional(),
+  use_temp_password: z.boolean().optional(),
 });
 
 // POST /api/members — invite a member (owner/admin only).
@@ -30,6 +32,8 @@ export async function POST(request: Request) {
       email: body.data.email,
       role: body.data.role,
       invitedBy: auth.user.id,
+      fullName: body.data.full_name,
+      useTempPassword: body.data.use_temp_password,
     });
     return jsonOk(result, { status: 201 });
   });

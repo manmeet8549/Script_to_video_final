@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Notification } from "@/types/db";
 
 export async function listNotifications(userId: string): Promise<Notification[]> {
@@ -70,4 +71,28 @@ export async function createNotification(input: {
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function broadcastNotifications(input: {
+  userIds: string[];
+  workspaceId: string;
+  type: Notification["type"];
+  title: string;
+  message?: string | null;
+  relatedProjectId?: string | null;
+  actionUrl?: string | null;
+}): Promise<void> {
+  if (input.userIds.length === 0) return;
+  const admin = createAdminClient();
+  const rows = input.userIds.map((userId) => ({
+    user_id: userId,
+    workspace_id: input.workspaceId,
+    type: input.type,
+    title: input.title,
+    message: input.message ?? null,
+    related_project_id: input.relatedProjectId ?? null,
+    action_url: input.actionUrl ?? null,
+  }));
+  const { error } = await admin.from("notifications").insert(rows);
+  if (error) throw error;
 }

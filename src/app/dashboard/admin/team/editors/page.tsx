@@ -1,24 +1,53 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, Plus, Calendar } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Loader2, Plus, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
-import { getStoredMembers, Member } from "../../../../utils/storage";
+import { api, ApiError } from "@/lib/api/client";
+import type { Profile, WorkspaceMember } from "@/types/db";
+
+type MemberRow = WorkspaceMember & { profile: Profile | null };
+
+const AVATAR_COLORS = [
+  "bg-amber-500", "bg-emerald-500", "bg-violet-500", "bg-blue-500", "bg-pink-500", "bg-teal-500",
+];
+
+function avatarLetter(m: MemberRow) {
+  return (m.profile?.full_name ?? m.profile?.email ?? "?").slice(0, 1).toUpperCase();
+}
+
+function fmtJoined(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
 
 export default function AdminTeamEditorsPage() {
+  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [members, setMembers] = useState<Member[]>([]);
 
-  useEffect(() => {
-    setMembers(getStoredMembers());
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.get<MemberRow[]>("/api/members");
+      setMembers(data);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to load members.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const filteredMembers = members.filter((m) => {
-    const matchesRole = m.role === "editor";
-    const matchesSearch =
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.email.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesRole && matchesSearch;
+  useEffect(() => {
+    void (async () => { await load(); })();
+  }, [load]);
+
+  const filtered = members.filter((m) => {
+    if (m.role !== "editor") return false;
+    const name = m.profile?.full_name ?? m.profile?.email ?? "";
+    return (
+      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.profile?.email ?? "").toLowerCase().includes(searchQuery.toLowerCase())
+    );
   });
 
   return (
@@ -32,60 +61,96 @@ export default function AdminTeamEditorsPage() {
             </p>
           </div>
           <button
-            onClick={() => toast.info("Invite modal triggered from Team Hub")}
+            onClick={() => toast.info("Use Team Management to add members.")}
             className="h-10 px-4 bg-brand-green hover:bg-brand-green-hover text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-brand-green/10"
           >
             <Plus size={14} strokeWidth={3} />
-            Invite Member
+            Invite Editor
           </button>
         </div>
 
-        {/* Filter Toolbar */}
-        <div className="flex items-center justify-end gap-4 bg-white border border-zinc-200 p-4 rounded-2xl shadow-2xs select-none">
-          <span className="text-xs font-bold text-zinc-400">Showing 2 editors</span>
+        {/* Toolbar */}
+        <div className="flex items-center justify-between gap-4 bg-white border border-zinc-200 p-4 rounded-2xl shadow-2xs">
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 px-3 border border-zinc-200 focus:border-brand-green rounded-xl text-xs font-semibold text-zinc-900 outline-none w-60"
+          />
+          <span className="text-xs font-bold text-zinc-400">
+            {loading ? "Loading…" : `${filtered.length} editor${filtered.length !== 1 ? "s" : ""}`}
+          </span>
         </div>
 
-        {/* Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredMembers.map((member) => (
-            <div
-              key={member.id}
-              className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-4 hover:border-zinc-300 transition-all flex flex-col justify-between"
-            >
-              <div className="flex items-start justify-between relative">
-                <div className="relative">
-                  <div className={`w-12 h-12 rounded-full ${member.avatarColor} text-white flex items-center justify-center font-extrabold text-base select-none`}>
-                    {member.avatarLetter}
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 size={28} className="animate-spin text-brand-green" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white border border-zinc-200 rounded-2xl p-16 text-center shadow-xs">
+            <p className="text-sm font-semibold text-zinc-400">No editors found.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filtered.map((member, idx) => (
+              <div
+                key={member.id}
+                className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-4 hover:border-zinc-300 transition-all flex flex-col justify-between"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="relative">
+                    <div
+                      className={`w-12 h-12 rounded-full ${AVATAR_COLORS[idx % AVATAR_COLORS.length]} text-white flex items-center justify-center font-extrabold text-base select-none`}
+                    >
+                      {avatarLetter(member)}
+                    </div>
+                    <span
+                      className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                        member.status === "active" ? "bg-brand-green animate-pulse" : "bg-zinc-350"
+                      }`}
+                    />
                   </div>
-                  <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
-                    member.status === "active" ? "bg-brand-green animate-pulse" : "bg-zinc-350"
-                  }`} />
+                  <button className="p-1.5 text-zinc-400 hover:text-zinc-600 rounded-lg transition-colors cursor-pointer">
+                    <MoreVertical size={16} />
+                  </button>
+                </div>
+
+                <div className="text-left space-y-1.5">
+                  <h4 className="text-sm font-extrabold text-zinc-900">
+                    {member.profile?.full_name ?? "—"}
+                  </h4>
+                  <span className="text-[11px] font-semibold text-zinc-400 block">
+                    {member.profile?.email ?? "—"}
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-50 text-amber-700 border border-amber-100 uppercase tracking-wide mt-1">
+                      editor
+                    </span>
+                    {member.status === "pending" && (
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide mt-1 bg-amber-50 text-amber-700 border border-amber-100">
+                        pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <hr className="border-zinc-100" />
+
+                <div className="grid grid-cols-2 text-xs font-semibold">
+                  <div className="space-y-0.5 text-left border-r border-zinc-100 pr-2">
+                    <span className="text-[9px] font-bold text-zinc-400 block uppercase">Status</span>
+                    <span className="text-xs font-extrabold text-zinc-800 capitalize">{member.status}</span>
+                  </div>
+                  <div className="space-y-0.5 text-left pl-4">
+                    <span className="text-[9px] font-bold text-zinc-400 block uppercase">Joined</span>
+                    <span className="text-xs font-extrabold text-zinc-800">{fmtJoined(member.created_at)}</span>
+                  </div>
                 </div>
               </div>
-
-              <div className="text-left space-y-1.5">
-                <h4 className="text-sm font-extrabold text-zinc-900">{member.name}</h4>
-                <span className="text-[11px] font-semibold text-zinc-400 block">{member.email}</span>
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-50 text-amber-705 border border-amber-100 uppercase tracking-wide mt-1.5">
-                  {member.role}
-                </span>
-              </div>
-
-              <hr className="border-zinc-100" />
-
-              <div className="grid grid-cols-2 text-center text-xs font-semibold">
-                <div className="space-y-0.5 text-left border-r border-zinc-100 pr-2">
-                  <span className="text-[9px] font-bold text-zinc-400 block uppercase">Projects</span>
-                  <span className="text-xs font-extrabold text-zinc-800">{member.projects} active</span>
-                </div>
-                <div className="space-y-0.5 text-left pl-4">
-                  <span className="text-[9px] font-bold text-zinc-400 block uppercase">Joined</span>
-                  <span className="text-xs font-extrabold text-zinc-800">{member.joined}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );

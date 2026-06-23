@@ -1,5 +1,11 @@
 import type { WorkspaceRole } from "@/types/db";
 
+// Cookie that records which workspace the user is currently acting in. Shared
+// between the DAL and the proxy (middleware) so both resolve the same "active"
+// membership. Lives here (a client-safe module) so the proxy can import it
+// without pulling in server-only DAL code.
+export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
+
 // Privilege ordering (higher number = more access). Used to pick a user's
 // primary role when they belong to multiple workspaces and to gate routes.
 export const ROLE_RANK: Record<WorkspaceRole, number> = {
@@ -41,6 +47,14 @@ export function canAccessSegment(segment: string, role: WorkspaceRole | null): b
   const allowed = SEGMENT_ROLES[segment];
   if (!allowed) return true; // non-role-gated segment (e.g. settings, notifications)
   return role != null && allowed.includes(role);
+}
+
+// Extract the role-gated top-level dashboard segment from a pathname, e.g.
+// "/dashboard/owner/workspaces" → "owner". Returns null for the dashboard index
+// and for non-gated segments so callers know there is nothing to authorize.
+export function dashboardSegmentFromPath(pathname: string): keyof typeof SEGMENT_ROLES | null {
+  const match = pathname.match(/^\/dashboard\/(owner|admin|editor|user)(?:\/|$)/);
+  return (match?.[1] as keyof typeof SEGMENT_ROLES | undefined) ?? null;
 }
 
 // Pick the highest-privilege role from a set of memberships.

@@ -1,158 +1,104 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
-  Grid,
-  Plus,
-  Search,
   Bell,
-  Settings,
-  MoreVertical,
-  Activity,
-  Users,
-  Key,
-  AlertTriangle,
-  FileCheck,
   ChevronRight,
-  TrendingUp,
-  X,
   Loader2,
-  FolderOpen,
-  HelpCircle,
-  LogOut,
-  AppWindow,
+  MoreVertical,
+  Plus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { api, ApiError } from "@/lib/api/client";
+import type { Notification, Workspace, WorkspaceMember } from "@/types/db";
 
-type WorkspaceItem = {
-  id: string;
-  name: string;
-  slug: string;
-  status: "Active" | "Suspended" | "Archived" | "Active (New)";
-  members: number;
-  projects: number;
-};
+type WorkspaceWithRole = Workspace & { role: WorkspaceMember["role"] };
+
+function relTime(iso: string): string {
+  const delta = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(delta / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
 
 export default function OwnerDashboardPage() {
+  const router = useRouter();
+  const [workspaces, setWorkspaces] = useState<WorkspaceWithRole[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Create workspace modal
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [newWorkspaceSlug, setNewWorkspaceSlug] = useState("");
-  const [newWorkspacePlan, setNewWorkspacePlan] = useState("Enterprise");
   const [isCreating, setIsCreating] = useState(false);
-  const [isAuditing, setIsAuditing] = useState(false);
 
-  // Dynamic counter states
-  const [workspaceCount, setWorkspaceCount] = useState(12);
-  const [totalProjectsCount, setTotalProjectsCount] = useState(156);
-  const [activeMembersCount, setActiveMembersCount] = useState(48);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [wsData, notifData] = await Promise.all([
+        api.get<WorkspaceWithRole[]>("/api/workspaces"),
+        api.get<Notification[]>("/api/notifications"),
+      ]);
+      setWorkspaces(wsData);
+      setNotifications(notifData);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to load dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([
-    {
-      id: "1",
-      name: "Acme Corp",
-      slug: "acme-corp",
-      status: "Active",
-      members: 24,
-      projects: 156,
-    },
-    {
-      id: "2",
-      name: "Globex",
-      slug: "globex",
-      status: "Suspended",
-      members: 8,
-      projects: 42,
-    },
-    {
-      id: "3",
-      name: "Soylent Corp",
-      slug: "soylent-corp",
-      status: "Archived",
-      members: 112,
-      projects: 84,
-    },
-  ]);
+  useEffect(() => {
+    void (async () => { await load(); })();
+  }, [load]);
 
-  const [attentionWorkspaces, setAttentionWorkspaces] = useState([
-    {
-      id: "attn-1",
-      name: "Legacy Media",
-      slug: "legacy-media",
-      status: "Payment Failed",
-      statusColor: "bg-red-50 text-red-700 border-red-150",
-      projects: 45,
-      members: 12,
-    },
-    {
-      id: "attn-2",
-      name: "Freelance Hub",
-      slug: "freelance-hub",
-      status: "Nearing Quota",
-      statusColor: "bg-amber-50 text-amber-700 border-amber-150",
-      projects: 89,
-      members: 3,
-    },
-    {
-      id: "attn-3",
-      name: "Marketing Q3",
-      slug: "marketing-q3",
-      status: "Active (New)",
-      statusColor: "bg-emerald-50 text-brand-green border-emerald-150",
-      projects: 2,
-      members: 8,
-    },
-  ]);
-
-  const handleCreateWorkspace = (e: React.FormEvent) => {
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newWorkspaceName || !newWorkspaceSlug) {
-      toast.error("Please fill in all workspace details");
+    if (!newWorkspaceName.trim() || !newWorkspaceSlug.trim()) {
+      toast.error("Please fill in all workspace details.");
       return;
     }
-
     setIsCreating(true);
-    toast.info("Configuring cloud databases & billing profiles...");
-
-    setTimeout(() => {
-      setIsCreating(false);
-      setWorkspaceCount((prev) => prev + 1);
-      const newWS: WorkspaceItem = {
-        id: Date.now().toString(),
-        name: newWorkspaceName,
-        slug: newWorkspaceSlug.toLowerCase().replace(/\s+/g, "-"),
-        status: "Active (New)" as any,
-        members: 1,
-        projects: 0,
-      };
-      setWorkspaces([newWS, ...workspaces]);
+    try {
+      const created = await api.post<WorkspaceWithRole>("/api/workspaces", {
+        name: newWorkspaceName.trim(),
+        slug: newWorkspaceSlug.trim().toLowerCase().replace(/\s+/g, "-"),
+      });
+      setWorkspaces((prev) => [created, ...prev]);
       setShowCreateModal(false);
       setNewWorkspaceName("");
       setNewWorkspaceSlug("");
-      toast.success(`Workspace "${newWorkspaceName}" successfully provisioned!`);
-    }, 1500);
+      toast.success(`Workspace "${created.name}" provisioned!`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to create workspace.");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const runFullAudit = () => {
-    setIsAuditing(true);
-    toast.info("Scanning platform usage, database integrity, and connected API channels...");
+  const totalWorkspaces = workspaces.length;
+  const activeWorkspaces = workspaces.filter((ws) => ws.status === "active").length;
+  const suspendedWorkspaces = workspaces.filter((ws) => ws.status === "suspended");
+  const archivedWorkspaces = workspaces.filter((ws) => ws.status === "archived");
+  const attentionWorkspaces = [...suspendedWorkspaces, ...archivedWorkspaces].slice(0, 5);
+  const unreadNotifs = notifications.filter((n) => !n.is_read).length;
+  const activityLog = notifications.slice(0, 5);
 
-    setTimeout(() => {
-      setIsAuditing(false);
-      toast.success("Audit completed successfully! 0 critical vulnerability found.");
-    }, 2000);
-  };
-
-  // SVGs bar chart data points
-  const barChartData = [
-    { month: "Jan", count: 50, height: 50 },
-    { month: "Feb", count: 75, height: 75 },
-    { month: "Mar", count: 100, height: 100 },
-    { month: "Apr", count: 85, height: 85 },
-    { month: "May", count: 130, height: 130 },
-    { month: "Jun", count: 150, height: 150 },
-  ];
+  if (loading) {
+    return (
+      <main className="flex-1 flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-brand-green" />
+      </main>
+    );
+  }
 
   return (
     <>
@@ -181,12 +127,11 @@ export default function OwnerDashboardPage() {
                   value={newWorkspaceName}
                   onChange={(e) => {
                     setNewWorkspaceName(e.target.value);
-                    setNewWorkspaceSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"));
+                    setNewWorkspaceSlug(e.target.value.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
                   }}
                   className="w-full px-4 h-11 border border-zinc-200 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 rounded-xl text-sm font-semibold text-zinc-900 outline-none"
                 />
               </div>
-
               <div className="space-y-1.5">
                 <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide block">
                   Workspace Slug
@@ -200,34 +145,15 @@ export default function OwnerDashboardPage() {
                   className="w-full px-4 h-11 border border-zinc-200 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 rounded-xl text-sm font-semibold text-zinc-900 outline-none bg-zinc-50/50"
                 />
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide block">
-                  Select Plan
-                </label>
-                <select
-                  value={newWorkspacePlan}
-                  onChange={(e) => setNewWorkspacePlan(e.target.value)}
-                  className="w-full px-4 h-11 border border-zinc-200 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 rounded-xl text-sm font-semibold text-zinc-900 outline-none bg-white cursor-pointer"
-                >
-                  <option>Pro</option>
-                  <option>Enterprise</option>
-                  <option>Free Trial</option>
-                </select>
-              </div>
-
               <button
                 type="submit"
                 disabled={isCreating}
-                className="w-full h-11 bg-brand-green hover:bg-brand-green-hover disabled:bg-brand-green/60 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/10 cursor-pointer flex items-center justify-center gap-1.5 pt-0.5"
+                className="w-full h-11 bg-brand-green hover:bg-brand-green-hover disabled:bg-brand-green/60 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/10 cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {isCreating ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Provisioning...
-                  </>
+                  <><Loader2 size={16} className="animate-spin" /> Provisioning...</>
                 ) : (
-                  <>Create Workspace</>
+                  "Create Workspace"
                 )}
               </button>
             </form>
@@ -235,16 +161,51 @@ export default function OwnerDashboardPage() {
         </div>
       )}
 
-      {/* Scrollable Dashboard Body */}
       <main className="flex-1 overflow-y-auto px-8 py-8">
         <div className="max-w-6xl mx-auto space-y-8">
+          <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+            <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 text-left">
+              Owner Dashboard
+            </h1>
+            <button
+              onClick={load}
+              className="text-xs font-bold text-brand-green hover:underline cursor-pointer"
+            >
+              Refresh
+            </button>
+          </div>
+
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { label: "Workspaces", val: workspaceCount, sub: "+2 this month", color: "bg-brand-green-light text-brand-green border-brand-green/10" },
-              { label: "Total Projects", val: totalProjectsCount, sub: "+24 this month", color: "bg-brand-green-light text-brand-green border-brand-green/10" },
-              { label: "Active Members", val: activeMembersCount, sub: "+5 this month", color: "bg-brand-green-light text-brand-green border-brand-green/10" },
-              { label: "APIs Connected", val: 8, sub: "+1 this month", color: "bg-brand-green-light text-brand-green border-brand-green/10" },
+              {
+                label: "Workspaces",
+                val: totalWorkspaces,
+                sub: `${activeWorkspaces} active`,
+                color: "bg-brand-green-light text-brand-green border-brand-green/10",
+              },
+              {
+                label: "Suspended",
+                val: suspendedWorkspaces.length,
+                sub: suspendedWorkspaces.length > 0 ? "Needs attention" : "All clear",
+                color: suspendedWorkspaces.length > 0
+                  ? "bg-red-50 text-red-700 border-red-100"
+                  : "bg-zinc-50 text-zinc-500 border-zinc-200",
+              },
+              {
+                label: "Archived",
+                val: archivedWorkspaces.length,
+                sub: "inactive",
+                color: "bg-zinc-50 text-zinc-500 border-zinc-200",
+              },
+              {
+                label: "Notifications",
+                val: unreadNotifs,
+                sub: unreadNotifs > 0 ? "unread" : "all read",
+                color: unreadNotifs > 0
+                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                  : "bg-zinc-50 text-zinc-500 border-zinc-200",
+              },
             ].map((kpi, idx) => (
               <div
                 key={idx}
@@ -256,57 +217,73 @@ export default function OwnerDashboardPage() {
                 <span className="text-3xl font-extrabold text-zinc-900 tracking-tight mt-1">
                   {kpi.val}
                 </span>
-                <span
-                  className={`inline-block px-1.5 py-0.25 rounded text-[9px] font-bold border mt-2 ${kpi.color}`}
-                >
+                <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold border mt-2 ${kpi.color}`}>
                   {kpi.sub}
                 </span>
               </div>
             ))}
           </div>
 
-          {/* Split layout: svg bar chart vs activity feed */}
+          {/* Main Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* SVG Growth Bar Chart */}
-            <div className="lg:col-span-7 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-6">
+            {/* Workspaces Requiring Attention */}
+            <div className="lg:col-span-7 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-100 pb-3 select-none">
                 <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide">
-                  Projects Over Time
+                  Workspaces Requiring Attention
                 </h3>
-                <button className="p-1.5 text-zinc-400 hover:text-zinc-650 rounded-lg">
-                  <MoreVertical size={16} />
+                <button
+                  onClick={() => router.push("/dashboard/owner/workspaces")}
+                  className="text-xs font-bold text-brand-green hover:underline cursor-pointer flex items-center gap-0.5"
+                >
+                  View All <ChevronRight size={14} />
                 </button>
               </div>
 
-              <div className="h-64 flex items-end justify-between px-2 pt-6 relative select-none">
-                {/* Y Axis Guides */}
-                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none text-[9px] font-bold text-zinc-300 text-left pl-1">
-                  <span className="border-b border-zinc-100 w-full pb-1">150</span>
-                  <span className="border-b border-zinc-100 w-full pb-1">100</span>
-                  <span className="border-b border-zinc-100 w-full pb-1">50</span>
-                  <span className="border-b border-zinc-100 w-full pb-1">0</span>
+              {attentionWorkspaces.length === 0 ? (
+                <p className="text-sm font-semibold text-zinc-400 py-6 text-center">
+                  All workspaces are operating normally. ✅
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs font-semibold text-zinc-800">
+                    <thead>
+                      <tr className="border-b border-zinc-200 text-zinc-400 font-extrabold select-none">
+                        <th className="py-2.5 uppercase tracking-wider">Workspace</th>
+                        <th className="py-2.5 uppercase tracking-wider">Status</th>
+                        <th className="py-2.5 text-right" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {attentionWorkspaces.map((ws) => (
+                        <tr key={ws.id} className="hover:bg-zinc-50/50">
+                          <td className="py-3 text-left">
+                            <span className="font-extrabold block text-zinc-900">{ws.name}</span>
+                            <span className="text-[10px] text-zinc-400 block mt-0.5">/{ws.slug}</span>
+                          </td>
+                          <td className="py-3">
+                            <span className={`px-2 py-0.5 border rounded-[4px] text-[10px] font-extrabold capitalize ${
+                              ws.status === "suspended"
+                                ? "bg-red-50 text-red-700 border-red-100"
+                                : "bg-zinc-100 text-zinc-600 border-zinc-200"
+                            }`}>
+                              {ws.status}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right">
+                            <button
+                              onClick={() => router.push(`/dashboard/owner/workspaces/${ws.id}`)}
+                              className="p-1.5 text-zinc-400 hover:text-zinc-600 rounded-lg cursor-pointer"
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-
-                {/* Bars container */}
-                <div className="flex-1 flex items-end justify-around relative z-10 pl-6 h-full pb-1">
-                  {barChartData.map((d, idx) => (
-                    <div key={idx} className="flex flex-col items-center gap-2 group cursor-pointer">
-                      {/* Tooltip */}
-                      <span className="opacity-0 group-hover:opacity-100 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded absolute transition-opacity duration-200 mt-[-25px] transform translate-y-[-10px] shadow-sm">
-                        {d.count}
-                      </span>
-                      {/* Bar */}
-                      <div
-                        style={{ height: `${(d.height / 150) * 160}px` }}
-                        className="w-10 bg-brand-green/80 hover:bg-brand-green transition-all rounded-t-lg shadow-3xs"
-                      />
-                      <span className="text-[10px] font-bold text-zinc-400">
-                        {d.month}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Recent Activity */}
@@ -316,109 +293,46 @@ export default function OwnerDashboardPage() {
                   Recent Activity
                 </h3>
                 <button
-                  onClick={() => toast.info("Opening all activity logs...")}
+                  onClick={() => router.push("/dashboard/owner/notifications")}
                   className="text-xs font-bold text-brand-green hover:underline cursor-pointer"
                 >
                   View All
                 </button>
               </div>
 
-              <div className="space-y-4 text-left select-none">
-                {[
-                  { title: "Sarah Jenkins created a new workspace", val: "Marketing Q3", time: "10 minutes ago", icon: "🏢" },
-                  { title: "Dev Team Alpha added 3 new members.", val: "", time: "2 hours ago", icon: "👥" },
-                  { title: "Mike Chen generated a new API key for", val: "Billing Service", time: "5 hours ago", icon: "🔑" },
-                  { title: "System triggered an alert for high usage in", val: "Legacy Workspace", time: "Yesterday at 4:30 PM", icon: "⚠️", danger: true },
-                  { title: "Design Studio published 12 new projects.", val: "", time: "Yesterday at 2:15 PM", icon: "🎬" },
-                ].map((log, idx) => (
-                  <div key={idx} className="flex items-start gap-3 p-1 rounded-lg hover:bg-zinc-50 transition-colors">
-                    <div className="w-7 h-7 bg-zinc-100 border border-zinc-200 flex items-center justify-center text-xs rounded-lg shrink-0 shadow-3xs">
-                      {log.icon}
+              {activityLog.length === 0 ? (
+                <div className="flex items-center gap-2 py-4">
+                  <Bell size={16} className="text-zinc-300" />
+                  <p className="text-xs font-semibold text-zinc-400">No recent activity.</p>
+                </div>
+              ) : (
+                <div className="space-y-4 text-left select-none">
+                  {activityLog.map((n) => (
+                    <div key={n.id} className="flex items-start gap-3 p-1 rounded-lg hover:bg-zinc-50 transition-colors">
+                      <div className={`w-7 h-7 border flex items-center justify-center text-xs rounded-lg shrink-0 shadow-3xs ${
+                        n.is_read ? "bg-zinc-100 border-zinc-200 text-zinc-500" : "bg-brand-green-light border-brand-green/20 text-brand-green"
+                      }`}>
+                        🔔
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-zinc-900 leading-tight truncate">{n.title}</p>
+                        {n.message && (
+                          <p className="text-[10px] font-semibold text-zinc-500 mt-0.5 truncate">{n.message}</p>
+                        )}
+                        <span className="text-[9px] font-bold text-zinc-400 block mt-1">{relTime(n.created_at)}</span>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-zinc-650 leading-tight">
-                        {log.title} <span className={`font-bold ${log.danger ? "text-red-500" : "text-zinc-900"}`}>{log.val}</span>
-                      </p>
-                      <span className="text-[9px] font-bold text-zinc-400 block mt-1">{log.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Section 1: Workspaces Requiring Attention */}
-          <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-4">
-            <div className="flex flex-wrap items-center justify-between border-b border-zinc-100 pb-3 gap-4">
-              <div className="text-left space-y-0.5">
-                <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide">
-                  Workspaces Requiring Attention
-                </h3>
-                <p className="text-[11px] font-semibold text-zinc-400">
-                  Review usage limits, billing issues, or security alerts across your platform.
-                </p>
-              </div>
-              <button
-                onClick={runFullAudit}
-                disabled={isAuditing}
-                className="h-9 px-4 bg-brand-green hover:bg-brand-green-hover disabled:bg-brand-green/60 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm animate-pulse"
-              >
-                {isAuditing ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" />
-                    Auditing...
-                  </>
-                ) : (
-                  <>Run Full Audit</>
-                )}
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs font-semibold text-zinc-800">
-                <thead>
-                  <tr className="border-b border-zinc-200 text-zinc-400 font-extrabold select-none pb-2">
-                    <th className="py-2.5 uppercase tracking-wider">Workspace</th>
-                    <th className="py-2.5 uppercase tracking-wider">Status</th>
-                    <th className="py-2.5 uppercase tracking-wider text-center">Projects</th>
-                    <th className="py-2.5 uppercase tracking-wider text-center">Members</th>
-                    <th className="py-2.5 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {attentionWorkspaces.map((ws) => (
-                    <tr key={ws.id} className="hover:bg-zinc-50/50">
-                      <td className="py-3 text-left">
-                        <span className="font-extrabold block text-zinc-900">{ws.name}</span>
-                        <span className="text-[10px] text-zinc-400 block mt-0.5">/{ws.slug}</span>
-                      </td>
-                      <td className="py-3">
-                        <span className={`px-2 py-0.5 border rounded-[4px] text-[10px] font-extrabold ${ws.statusColor}`}>
-                          {ws.status}
-                        </span>
-                      </td>
-                      <td className="py-3 text-center">{ws.projects}</td>
-                      <td className="py-3 text-center">{ws.members}</td>
-                      <td className="py-3 text-right">
-                        <button
-                          onClick={() => toast.info(`Managing alert context for ${ws.name}...`)}
-                          className="p-1.5 text-zinc-400 hover:text-zinc-600 rounded-lg cursor-pointer"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                      </td>
-                    </tr>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Bottom Section 2: Global Workspaces Grid */}
+          {/* Workspaces Grid */}
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3 select-none">
               <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide">
-                Workspaces
+                Your Workspaces
               </h3>
               <button
                 onClick={() => setShowCreateModal(true)}
@@ -429,53 +343,70 @@ export default function OwnerDashboardPage() {
               </button>
             </div>
 
-            {/* Grid cards list */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {workspaces.map((ws) => (
-                <div
-                  key={ws.id}
-                  onClick={() => {
-                    toast.success(`Managing workspace details for ${ws.name}`);
-                  }}
-                  className="bg-white border border-zinc-200 hover:border-brand-green hover:shadow-xs rounded-2xl p-6 shadow-2xs transition-all cursor-pointer text-left space-y-4 flex flex-col justify-between"
+            {workspaces.length === 0 ? (
+              <div className="bg-white border border-zinc-200 rounded-2xl p-16 text-center shadow-xs">
+                <p className="text-sm font-semibold text-zinc-400">No workspaces yet.</p>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="mt-3 text-xs font-bold text-brand-green hover:underline cursor-pointer"
                 >
-                  {/* Title & Status */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="text-sm font-extrabold text-zinc-955 block">{ws.name}</h4>
-                      <span className="text-[10px] text-zinc-450 block mt-0.5">/{ws.slug}</span>
+                  Create your first workspace →
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {workspaces.map((ws) => (
+                  <div
+                    key={ws.id}
+                    onClick={() => router.push(`/dashboard/owner/workspaces/${ws.id}`)}
+                    className="bg-white border border-zinc-200 hover:border-brand-green hover:shadow-xs rounded-2xl p-6 shadow-2xs transition-all cursor-pointer text-left space-y-4 flex flex-col justify-between"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="text-sm font-extrabold text-zinc-955 block">{ws.name}</h4>
+                        <span className="text-[10px] text-zinc-450 block mt-0.5">/{ws.slug}</span>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-[4px] text-[9px] font-extrabold uppercase border ${
+                          ws.status === "active"
+                            ? "bg-brand-green-light text-brand-green border-brand-green/10"
+                            : ws.status === "suspended"
+                            ? "bg-red-50 text-red-750 border-red-100 animate-pulse"
+                            : "bg-zinc-100 text-zinc-450 border-zinc-200"
+                        }`}
+                      >
+                        {ws.status}
+                      </span>
                     </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-[4px] text-[9px] font-extrabold uppercase border ${
-                        ws.status === "Active"
-                          ? "bg-brand-green-light text-brand-green border-brand-green/10"
-                          : ws.status === "Suspended"
-                          ? "bg-red-50 text-red-750 border-red-100 animate-pulse"
-                          : ws.status === "Active (New)"
-                          ? "bg-brand-green-light text-brand-green border-brand-green/20"
-                          : "bg-zinc-100 text-zinc-450 border-zinc-200"
-                      }`}
+
+                    <hr className="border-zinc-100" />
+
+                    <div className="grid grid-cols-2 text-xs font-semibold text-zinc-700">
+                      <div className="border-r border-zinc-100 pr-2">
+                        <span className="text-[9px] text-zinc-400 block uppercase font-extrabold">Role</span>
+                        <span className="text-zinc-800 font-extrabold mt-0.5 block capitalize">{ws.role}</span>
+                      </div>
+                      <div className="pl-4">
+                        <span className="text-[9px] text-zinc-400 block uppercase font-extrabold">Created</span>
+                        <span className="text-zinc-800 font-extrabold mt-0.5 block">
+                          {new Date(ws.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/dashboard/owner/workspaces/${ws.id}`);
+                      }}
+                      className="w-full h-9 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      {ws.status}
-                    </span>
+                      Manage Workspace <ChevronRight size={14} />
+                    </button>
                   </div>
-
-                  <hr className="border-zinc-100" />
-
-                  {/* Stats metrics */}
-                  <div className="grid grid-cols-2 text-xs font-semibold text-zinc-700">
-                    <div className="border-r border-zinc-100 pr-2">
-                      <span className="text-[9px] text-zinc-400 block uppercase font-extrabold">Members</span>
-                      <span className="text-zinc-800 font-extrabold mt-0.5 block">{ws.members} active</span>
-                    </div>
-                    <div className="pl-4">
-                      <span className="text-[9px] text-zinc-400 block uppercase font-extrabold">Projects</span>
-                      <span className="text-zinc-800 font-extrabold mt-0.5 block">{ws.projects} total</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>

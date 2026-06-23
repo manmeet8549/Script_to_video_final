@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Inbox,
@@ -16,17 +16,33 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarUserCard, TopbarUserMenu } from "@/components/sidebar-user-card";
+import { api } from "@/lib/api/client";
 
 export default function EditorLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   const isEditingWorkspace = pathname?.includes("/tasks/") && pathname?.includes("/edit");
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        type Workspace = { name: string };
+        type Notification = { is_read: boolean };
+        const [workspaces, notifs] = await Promise.all([
+          api.get<Workspace[]>("/api/workspaces").catch(() => [] as Workspace[]),
+          api.get<Notification[]>("/api/notifications").catch(() => [] as Notification[]),
+        ]);
+        if (workspaces.length > 0) setWorkspaceName(workspaces[0].name);
+        setUnreadCount(notifs.filter((n) => !n.is_read).length);
+      } catch {
+        // Fail silently
+      }
+    };
+
+    if (!isEditingWorkspace) fetchData();
+  }, [pathname, isEditingWorkspace]);
 
   if (isEditingWorkspace) {
     return <div className="min-h-screen bg-zinc-955 flex flex-col">{children}</div>;
@@ -35,10 +51,10 @@ export default function EditorLayout({ children }: { children: React.ReactNode }
   const navItems = [
     { label: "Dashboard", href: "/dashboard/editor", icon: <LayoutDashboard size={16} /> },
     { category: "TASKS" },
-    { label: "Pending Requests", href: "/dashboard/editor/tasks?status=pending", icon: <Inbox size={16} />, badge: "3", badgeColor: "bg-red-500 text-white" },
-    { label: "In Progress", href: "/dashboard/editor/tasks?status=in_progress", icon: <Loader2 size={16} />, badge: "2", badgeColor: "bg-amber-500 text-white" },
-    { label: "Under Review", href: "/dashboard/editor/tasks?status=review", icon: <Eye size={16} />, badge: "1", badgeColor: "bg-blue-500 text-white" },
-    { label: "Completed", href: "/dashboard/editor/completed", icon: <CheckCircle2 size={16} />, badge: "45", badgeColor: "bg-emerald-500 text-white" },
+    { label: "Pending Requests", href: "/dashboard/editor/tasks?status=pending", icon: <Inbox size={16} /> },
+    { label: "In Progress", href: "/dashboard/editor/tasks?status=in_progress", icon: <Loader2 size={16} /> },
+    { label: "Under Review", href: "/dashboard/editor/tasks?status=review", icon: <Eye size={16} /> },
+    { label: "Completed", href: "/dashboard/editor/completed", icon: <CheckCircle2 size={16} /> },
   ];
 
   return (
@@ -52,7 +68,7 @@ export default function EditorLayout({ children }: { children: React.ReactNode }
               Editor Workflow
             </span>
             <span className="text-[10px] font-bold text-zinc-450 block mt-1 uppercase tracking-wider">
-              Editor Active
+              {workspaceName ?? "Loading..."}
             </span>
           </div>
 
@@ -70,9 +86,8 @@ export default function EditorLayout({ children }: { children: React.ReactNode }
                 );
               }
 
-              // Editor query param matching helper
               const isActive = pathname === item.href || (item.href!.includes('?') && typeof window !== 'undefined' && pathname + window.location.search === item.href);
-              
+
               return (
                 <Link
                   key={idx}
@@ -87,13 +102,6 @@ export default function EditorLayout({ children }: { children: React.ReactNode }
                     {item.icon}
                     {item.label}
                   </span>
-                  {item.badge && (
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                      isActive ? "bg-[#d2e2cd] text-sidebar-active-text" : "bg-zinc-200/60 text-zinc-550"
-                    }`}>
-                      {item.badge}
-                    </span>
-                  )}
                 </Link>
               );
             })}
@@ -126,9 +134,11 @@ export default function EditorLayout({ children }: { children: React.ReactNode }
                 <Bell size={16} />
                 Notifications
               </span>
-              <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
-                2
-              </span>
+              {unreadCount !== null && unreadCount > 0 && (
+                <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                  {unreadCount}
+                </span>
+              )}
             </Link>
             <button
               onClick={() => toast.info("Opening Help & Support panel...")}
@@ -150,10 +160,8 @@ export default function EditorLayout({ children }: { children: React.ReactNode }
         <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-between shrink-0 select-none z-45">
           <div className="flex items-center gap-2 text-xs font-bold text-zinc-450 uppercase tracking-wider">
             <Pen size={14} className="text-brand-green" />
-            <span>Acme Corp</span>
+            <span>{workspaceName ?? ""}</span>
           </div>
-
-
 
           <div className="flex items-center gap-4">
             <Link
@@ -161,7 +169,9 @@ export default function EditorLayout({ children }: { children: React.ReactNode }
               className="p-2 text-zinc-455 hover:text-zinc-650 transition-colors relative"
             >
               <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount !== null && unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              )}
             </Link>
             <TopbarUserMenu fallbackInitials="TW" />
           </div>

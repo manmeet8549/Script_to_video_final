@@ -126,7 +126,7 @@ function AcceptInviteFlow() {
       )}
 
       {stage === "welcome" && (
-        <Welcome name={fullName || "Admin"} workspaceName={workspaceName} onSkip={() => router.push("/dashboard/admin")} />
+        <Welcome name={fullName || "there"} workspaceName={workspaceName} roleLabel={roleLabel} onSkip={() => router.push("/dashboard")} />
       )}
     </div>
   );
@@ -213,7 +213,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 function PasswordStep({
-  email,
+  email: emailProp,
   hasSession,
   onDone,
 }: {
@@ -221,6 +221,7 @@ function PasswordStep({
   hasSession: boolean;
   onDone: () => void;
 }) {
+  const [emailInput, setEmailInput] = useState(emailProp);
   const [tempPassword, setTempPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -228,11 +229,13 @@ function PasswordStep({
   const [showNew, setShowNew] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const email = emailInput.trim();
   const score = strength(password);
   const allRulesMet = score === RULES.length;
   const matches = confirm.length > 0 && confirm === password;
+  const emailOk = hasSession || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const tempOk = hasSession || tempPassword.length > 0;
-  const canSubmit = tempOk && allRulesMet && matches && !submitting;
+  const canSubmit = emailOk && tempOk && allRulesMet && matches && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -293,6 +296,21 @@ function PasswordStep({
       )}
 
       <div className="space-y-4">
+        {!hasSession && !emailProp && (
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-wide block">
+              Your Email Address
+            </label>
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="admin@company.com"
+              className="w-full px-4 h-11 border border-zinc-200 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 rounded-xl text-sm font-semibold text-zinc-900 outline-none transition-all"
+            />
+          </div>
+        )}
+
         {!hasSession && (
           <PasswordInput
             label="Temporary Password"
@@ -518,33 +536,35 @@ function ProfileStep({
 function Welcome({
   name,
   workspaceName,
+  roleLabel,
   onSkip,
 }: {
   name: string;
   workspaceName: string;
+  roleLabel: string;
   onSkip: () => void;
 }) {
   const cards = [
     {
       icon: <Users size={22} />,
-      title: "Invite Your Team",
-      desc: "Add members to start creating videos",
-      cta: "Invite Members",
-      href: "/dashboard/admin/team",
+      title: "Meet Your Team",
+      desc: "See who you'll be collaborating with",
+      cta: "View Members",
+      href: "/dashboard",
     },
     {
       icon: <Plug size={22} />,
-      title: "Connect APIs",
-      desc: "Set up voice, video, and publishing integrations",
-      cta: "Configure APIs",
-      href: "/dashboard/admin/workspace-settings",
+      title: "Set Up Your Profile",
+      desc: "Add your details so your team recognizes you",
+      cta: "Open Settings",
+      href: "/dashboard/settings",
     },
     {
       icon: <LayoutDashboard size={22} />,
       title: "Explore Dashboard",
-      desc: "Get familiar with your admin tools",
+      desc: "Get familiar with your workspace tools",
       cta: "Go to Dashboard",
-      href: "/dashboard/admin",
+      href: "/dashboard",
     },
   ];
 
@@ -553,7 +573,7 @@ function Welcome({
       <div className="max-w-3xl w-full">
         <h1 className="text-4xl font-extrabold tracking-tight">Welcome to UChat, {name}!</h1>
         <p className="text-lg font-medium text-white/90 mt-3">
-          You&apos;re now the Administrator of {workspaceName}.
+          You&apos;re now part of {workspaceName} as {roleLabel}.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-10">
