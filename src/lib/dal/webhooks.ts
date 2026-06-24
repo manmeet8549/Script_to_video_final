@@ -100,7 +100,7 @@ export async function completeVideoByJob(
       r2_key: stored?.r2Key ?? null,
       thumbnail_r2_key: stored?.thumbnailR2Key ?? null,
       file_size_bytes: stored?.fileSizeBytes ?? null,
-      duration_seconds: durationSeconds ?? null,
+      duration_seconds: durationSeconds ? Math.round(durationSeconds) : null,
       width: dimension.width ?? null,
       height: dimension.height ?? null,
     })
@@ -143,7 +143,7 @@ export async function completeVoiceByJob(
     .update({
       status,
       audio_url: status === "completed" ? audioUrl ?? null : null,
-      duration: durationSeconds ?? null,
+      duration: durationSeconds ? Math.round(durationSeconds) : null,
       error: status === "failed" ? error ?? "Generation failed" : null,
     })
     .eq("id", row.id);

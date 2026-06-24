@@ -181,22 +181,34 @@ export async function GET(request: NextRequest) {
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`${base}/v3/avatars/looks?limit=36`, {
-        headers: { "x-api-key": resolved!.credential.apiKey },
-        signal: controller.signal,
-      });
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      
+      const [privateRes, publicRes] = await Promise.all([
+        fetch(`${base}/v3/avatars/looks?ownership=private`, {
+          headers: { "x-api-key": resolved!.credential.apiKey },
+          signal: controller.signal,
+        }).catch(() => null),
+        fetch(`${base}/v3/avatars/looks?ownership=public&limit=100`, {
+          headers: { "x-api-key": resolved!.credential.apiKey },
+          signal: controller.signal,
+        }).catch(() => null),
+      ]);
       clearTimeout(timeout);
-      if (!res.ok) {
-        // Don't cache a transient failure — retry on the next request.
-        return jsonOk({
-          avatars: MOCK_AVATARS,
-          provider: "heygen",
-          warning: `HeyGen API returned ${res.status}. Showing default stock avatars.`,
-        });
+
+      let privateRaw: HeygenAvatar[] = [];
+      if (privateRes && privateRes.ok) {
+        const json = await privateRes.json().catch(() => ({}));
+        privateRaw = json.data?.avatars || json.data || [];
       }
-      const json = await res.json();
-      const raw: HeygenAvatar[] = json.data?.avatars || json.data || [];
+
+      let publicRaw: HeygenAvatar[] = [];
+      if (publicRes && publicRes.ok) {
+        const json = await publicRes.json().catch(() => ({}));
+        publicRaw = json.data?.avatars || json.data || [];
+      }
+
+      const raw = [...privateRaw, ...publicRaw];
+
       // HeyGen can return the same avatar id in multiple groups — dedupe so the
       // client never renders duplicate React keys.
       const seen = new Set<string>();
@@ -207,7 +219,8 @@ export async function GET(request: NextRequest) {
           seen.add(a.id);
           return true;
         })
-        .slice(0, 36);
+        .slice(0, 100);
+
       if (avatars.length === 0) {
         return jsonOk({ avatars: MOCK_AVATARS, provider: "heygen" });
       }

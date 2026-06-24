@@ -379,7 +379,7 @@ export async function applyVideoResult(
       r2_key: stored?.r2Key ?? null,
       thumbnail_r2_key: stored?.thumbnailR2Key ?? null,
       file_size_bytes: stored?.fileSizeBytes ?? null,
-      duration_seconds: result.durationSeconds ?? null,
+      duration_seconds: result.durationSeconds ? Math.round(result.durationSeconds) : null,
       width: dimension.width ?? null,
       height: dimension.height ?? null,
     })
