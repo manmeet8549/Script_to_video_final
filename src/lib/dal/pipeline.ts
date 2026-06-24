@@ -5,12 +5,29 @@ import { getUser } from "@/lib/dal/auth";
 import { setStageStatus } from "@/lib/dal/projects";
 import { resolveCredential } from "@/lib/dal/integrations";
 import { uploadMedia } from "@/lib/storage/media";
+import { fetchAndStoreVideo } from "@/lib/storage/video-backfill";
+import { recordCreditUsage, addStorageUsage } from "@/lib/dal/credits";
 import {
+  getScriptProvider,
   getVoiceProvider,
   getVideoProvider,
   getEditProvider,
   getPublishProvider,
 } from "@/lib/integrations/registry";
+
+// A safe premium default to recover to when a saved ElevenLabs voice id is no
+// longer accessible (ElevenLabs "Rachel").
+const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
+
+async function workspaceIdForProject(projectId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("projects")
+    .select("workspace_id")
+    .eq("id", projectId)
+    .single();
+  return data?.workspace_id ?? null;
+}
 import type {
   EditingTask,
   PublishingTask,
@@ -20,6 +37,45 @@ import type {
 } from "@/types/db";
 
 // ---------------------------------------------------------------- scripts ----
+
+// Generate a script with the workspace's configured AI provider. OpenAI is the
+// priority provider; if no active OpenAI key is configured, fall back to NVIDIA
+// NIM. Returns the generated text plus which provider produced it. Does not
+// persist — callers decide whether to save the result.
+export async function generateScriptText(
+  workspaceId: string,
+  input: {
+    topic: string;
+    tone?: string;
+    language?: string;
+    targetDuration?: string;
+    instructions?: string;
+  },
+): Promise<{ content: string; wordCount: number; providerKey: string }> {
+  // Priority: OpenAI → NVIDIA NIM.
+  const resolved =
+    (await resolveCredential(workspaceId, "script", "openai")) ??
+    (await resolveCredential(workspaceId, "script", "nvidia"));
+
+  if (!resolved) {
+    throw new Error(
+      "No script provider configured. Add an OpenAI (or NVIDIA NIM) API key in the workspace API settings.",
+    );
+  }
+
+  const provider = getScriptProvider(resolved.api.provider_key);
+  if (!provider) {
+    throw new Error(`Unsupported script provider: ${resolved.api.provider_key}`);
+  }
+
+  const result = await provider.generateScript(resolved.credential, input);
+  if (result.status === "failed" || !result.content) {
+    throw new Error(result.error || "Script generation failed.");
+  }
+
+  const wordCount = result.content.trim().split(/\s+/).filter(Boolean).length;
+  return { content: result.content, wordCount, providerKey: resolved.api.provider_key };
+}
 
 export async function getLatestScript(projectId: string): Promise<Script | null> {
   const supabase = await createClient();
@@ -58,6 +114,17 @@ export async function saveScript(
 
   await setStageStatus(projectId, "script", "completed", { word_count: words });
   await supabase.from("projects").update({ status: "voice_gen" }).eq("id", projectId);
+
+  // Track-only credit accounting for AI generations.
+  if (input.aiGenerated) {
+    const workspaceId = await workspaceIdForProject(projectId);
+    if (workspaceId) {
+      await recordCreditUsage(workspaceId, "script", {
+        projectId,
+        reason: "Script generation",
+      });
+    }
+  }
   return data;
 }
 
@@ -93,8 +160,17 @@ export async function generateVoice(
   const provider = getVoiceProvider(resolved.api.provider_key);
   if (!provider) throw new Error(`Unsupported voice provider: ${resolved.api.provider_key}`);
 
-  const voiceId =
-    input.voiceId || (resolved.api.config?.default_voice_id as string) || "21m00Tcm4TlvDq8ikWAM";
+  let voiceId =
+    input.voiceId || (resolved.api.config?.default_voice_id as string) || DEFAULT_VOICE_ID;
+
+  // Verify the voice id is reachable before spending a TTS call; recover to a
+  // premium default if the saved voice was deleted or is otherwise inaccessible.
+  if (provider.verifyVoice) {
+    const accessible = await provider.verifyVoice(resolved.credential, voiceId);
+    if (!accessible && voiceId !== DEFAULT_VOICE_ID) {
+      voiceId = DEFAULT_VOICE_ID;
+    }
+  }
 
   // Insert a pending row first so the UI can reflect in-flight state.
   const { data: pending, error: insErr } = await supabase
@@ -129,10 +205,13 @@ export async function generateVoice(
     return failed ?? pending;
   }
 
+  // Upload to a PUBLIC R2 URL so the downstream video provider (HeyGen) can fetch
+  // the narration for lipsync — it cannot authenticate against the proxy route.
   const audioUrl = await uploadMedia(
     `${workspaceId}/${projectId}/voice-${pending.id}.mp3`,
     result.audio,
     result.contentType ?? "audio/mpeg",
+    { public: true },
   );
 
   const { data: completed, error: updErr } = await supabase
@@ -145,6 +224,7 @@ export async function generateVoice(
 
   await setStageStatus(projectId, "voice", "completed", { audio_url: audioUrl });
   await supabase.from("projects").update({ status: "video_gen" }).eq("id", projectId);
+  await recordCreditUsage(workspaceId, "voice", { projectId, reason: "Voice synthesis" });
   return completed;
 }
 
@@ -235,37 +315,87 @@ export async function pollVideo(workspaceId: string, videoGenId: string): Promis
   const result = await provider.getStatus(resolved.credential, row.provider_job_id);
   if (result.status === "generating") return row;
 
-  return applyVideoResult(row.id, row.project_id, result.status, result.resultUrl, result.error);
+  return applyVideoResult(row.id, row.project_id, {
+    status: result.status,
+    videoUrl: result.resultUrl,
+    thumbnailUrl: result.thumbnailUrl,
+    durationSeconds: result.durationSeconds,
+    error: result.error,
+  });
 }
 
-// Shared completion handler used by both polling and the webhook route.
+// Shared completion handler for the poller path (user session present, RLS-safe).
+// On success it back-fills the render into R2 (so playback/storage stays on our
+// own bucket) and records the video credit + storage usage. The webhook path
+// uses the parallel handler in `lib/dal/webhooks.ts`.
 export async function applyVideoResult(
   videoGenId: string,
   projectId: string,
-  status: "completed" | "failed",
-  videoUrl?: string,
-  error?: string,
+  result: {
+    status: "completed" | "failed";
+    videoUrl?: string;
+    thumbnailUrl?: string;
+    durationSeconds?: number;
+    error?: string;
+  },
 ): Promise<VideoGeneration> {
   const supabase = await createClient();
+
+  if (result.status === "failed") {
+    const { data: failed } = await supabase
+      .from("video_generations")
+      .update({ status: "failed", error: result.error ?? "Generation failed", video_url: null })
+      .eq("id", videoGenId)
+      .select("*")
+      .single();
+    await setStageStatus(projectId, "video", "failed");
+    return failed!;
+  }
+
+  const { data: row } = await supabase
+    .from("video_generations")
+    .select("*")
+    .eq("id", videoGenId)
+    .single();
+  const dimension = (row?.settings?.dimension as { width?: number; height?: number }) ?? {};
+  const workspaceId = await workspaceIdForProject(projectId);
+
+  // Back-fill the provider render into R2; fall back to the provider URL if the
+  // download/upload fails so the project never gets stuck.
+  let stored = null as Awaited<ReturnType<typeof fetchAndStoreVideo>>;
+  if (result.videoUrl && workspaceId) {
+    stored = await fetchAndStoreVideo(workspaceId, projectId, result.videoUrl, result.thumbnailUrl);
+  }
+
+  const finalVideoUrl = stored?.videoUrl ?? result.videoUrl ?? null;
+  const finalThumbUrl = stored?.thumbnailUrl ?? result.thumbnailUrl ?? null;
+
   const { data: updated } = await supabase
     .from("video_generations")
     .update({
-      status,
-      video_url: status === "completed" ? videoUrl ?? null : null,
-      error: status === "failed" ? error ?? "Generation failed" : null,
+      status: "completed",
+      video_url: finalVideoUrl,
+      thumbnail_url: finalThumbUrl,
+      r2_key: stored?.r2Key ?? null,
+      thumbnail_r2_key: stored?.thumbnailR2Key ?? null,
+      file_size_bytes: stored?.fileSizeBytes ?? null,
+      duration_seconds: result.durationSeconds ?? null,
+      width: dimension.width ?? null,
+      height: dimension.height ?? null,
     })
     .eq("id", videoGenId)
     .select("*")
     .single();
 
-  if (status === "completed") {
-    await setStageStatus(projectId, "video", "completed", { video_url: videoUrl });
-    await supabase
-      .from("projects")
-      .update({ status: "editing", video_url: videoUrl ?? null })
-      .eq("id", projectId);
-  } else {
-    await setStageStatus(projectId, "video", "failed");
+  await setStageStatus(projectId, "video", "completed", { video_url: finalVideoUrl });
+  await supabase
+    .from("projects")
+    .update({ status: "editing", video_url: finalVideoUrl, thumbnail_url: finalThumbUrl })
+    .eq("id", projectId);
+
+  if (workspaceId) {
+    await recordCreditUsage(workspaceId, "video", { projectId, reason: "Avatar video render" });
+    if (stored?.fileSizeBytes) await addStorageUsage(workspaceId, stored.fileSizeBytes);
   }
   return updated!;
 }
@@ -394,6 +524,36 @@ export async function createPublishTask(
   // Scheduled posts are published later by a job; nothing more to do now.
   if (input.scheduledAt) return task;
 
+  // If the workspace requires approval, route the post to the admin approval
+  // queue instead of publishing immediately. It is released once approved.
+  const { data: workspace } = await supabase
+    .from("workspaces")
+    .select("metadata")
+    .eq("id", workspaceId)
+    .single();
+  const approvalRequired = Boolean(
+    (workspace?.metadata as Record<string, unknown> | null)?.approval_required,
+  );
+  if (approvalRequired) {
+    await supabase
+      .from("approval_items")
+      .insert({
+        workspace_id: workspaceId,
+        project_id: projectId,
+        publishing_task_id: task.id,
+        status: "pending",
+        requested_by: user?.id ?? null,
+      });
+    const { data: held } = await supabase
+      .from("publishing_tasks")
+      .update({ status: "draft" })
+      .eq("id", task.id)
+      .select("*")
+      .single();
+    await supabase.from("projects").update({ status: "review" }).eq("id", projectId);
+    return held ?? task;
+  }
+
   const resolved = await resolveCredential(workspaceId, "publishing");
   if (!resolved || !videoUrl) {
     const reason = !videoUrl ? "No video to publish." : "No publishing provider configured.";
@@ -440,6 +600,82 @@ export async function createPublishTask(
   if (result.status === "completed") {
     await setStageStatus(projectId, "publish", "completed");
     await supabase.from("projects").update({ status: "published" }).eq("id", projectId);
+    await recordCreditUsage(workspaceId, "publish", {
+      projectId,
+      reason: `Publish to ${input.platform}`,
+    });
+  }
+  return updated ?? task;
+}
+
+// Publish a previously-held task (released from the approval queue). Mirrors the
+// non-approval branch of createPublishTask. Returns the updated task.
+export async function publishApprovedTask(
+  workspaceId: string,
+  publishingTaskId: string,
+): Promise<PublishingTask> {
+  const supabase = await createClient();
+  const { data: task } = await supabase
+    .from("publishing_tasks")
+    .select("*")
+    .eq("id", publishingTaskId)
+    .single();
+  if (!task) throw new Error("Publishing task not found");
+
+  const videoUrl = (await getLatestVideo(task.project_id))?.video_url ?? null;
+  const resolved = await resolveCredential(workspaceId, "publishing");
+  if (!resolved || !videoUrl) {
+    const reason = !videoUrl ? "No video to publish." : "No publishing provider configured.";
+    const { data: failed } = await supabase
+      .from("publishing_tasks")
+      .update({ status: "failed", error: reason })
+      .eq("id", task.id)
+      .select("*")
+      .single();
+    return failed ?? task;
+  }
+
+  const provider = getPublishProvider(resolved.api.provider_key);
+  const result = await provider.publish(resolved.credential, {
+    platform: task.platform,
+    videoUrl,
+    title: task.title ?? undefined,
+    description: task.description ?? undefined,
+    tags: task.tags ?? undefined,
+    thumbnailUrl: task.thumbnail_url ?? undefined,
+    visibility: task.visibility,
+  });
+
+  const patch =
+    result.status === "completed"
+      ? {
+          status: "published" as const,
+          published_at: new Date().toISOString(),
+          platform_video_id: result.resultUrl ?? result.providerJobId ?? null,
+          publish_provider: resolved.api.provider_key,
+        }
+      : result.status === "failed"
+        ? { status: "failed" as const, error: result.error ?? "Publish failed" }
+        : {
+            status: "publishing" as const,
+            provider_job_id: result.providerJobId,
+            publish_provider: resolved.api.provider_key,
+          };
+
+  const { data: updated } = await supabase
+    .from("publishing_tasks")
+    .update(patch)
+    .eq("id", task.id)
+    .select("*")
+    .single();
+
+  if (result.status === "completed") {
+    await setStageStatus(task.project_id, "publish", "completed");
+    await supabase.from("projects").update({ status: "published" }).eq("id", task.project_id);
+    await recordCreditUsage(workspaceId, "publish", {
+      projectId: task.project_id,
+      reason: `Publish to ${task.platform}`,
+    });
   }
   return updated ?? task;
 }

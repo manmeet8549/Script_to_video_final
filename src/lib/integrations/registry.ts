@@ -1,14 +1,23 @@
 import "server-only";
 
+import { openai } from "@/lib/integrations/openai";
+import { nvidiaNim } from "@/lib/integrations/nvidia";
 import { elevenLabs } from "@/lib/integrations/elevenlabs";
 import { heygen } from "@/lib/integrations/heygen";
+import { submagic } from "@/lib/integrations/submagic";
 import { genericEdit, genericPublish } from "@/lib/integrations/generic";
 import type {
   EditProvider,
   PublishProvider,
+  ScriptProvider,
   VideoProvider,
   VoiceProvider,
 } from "@/lib/integrations/types";
+
+const scriptProviders: Record<string, ScriptProvider> = {
+  openai,
+  nvidia: nvidiaNim,
+};
 
 const voiceProviders: Record<string, VoiceProvider> = {
   elevenlabs: elevenLabs,
@@ -19,13 +28,18 @@ const videoProviders: Record<string, VideoProvider> = {
 };
 
 const editProviders: Record<string, EditProvider> = {
-  // Any configured AI editing service falls back to the generic HTTP adapter.
+  submagic,
+  // Any other AI editing service falls back to the generic HTTP adapter.
   "generic-edit": genericEdit,
 };
 
 const publishProviders: Record<string, PublishProvider> = {
   "generic-publish": genericPublish,
 };
+
+export function getScriptProvider(key: string): ScriptProvider | null {
+  return scriptProviders[key] ?? null;
+}
 
 export function getVoiceProvider(key: string): VoiceProvider | null {
   return voiceProviders[key] ?? null;

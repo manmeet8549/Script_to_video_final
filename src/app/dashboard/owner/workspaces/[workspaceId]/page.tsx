@@ -16,6 +16,8 @@ import {
   Trash2,
   Plus,
   AlertCircle,
+  Copy,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
@@ -31,7 +33,7 @@ type MemberWithProfile = WorkspaceMember & { profile: Profile | null };
 type SafeWorkspaceApi = {
   id: string;
   workspace_id: string;
-  provider: "voice" | "video" | "editing" | "publishing";
+  provider: "script" | "voice" | "video" | "editing" | "publishing";
   provider_key: string;
   api_name: string;
   is_active: boolean;
@@ -46,6 +48,13 @@ type WorkspaceDetail = {
   role: WorkspaceRole;
   members: MemberWithProfile[];
   projects: Project[];
+};
+
+type InviteResult = {
+  member: WorkspaceMember;
+  tempPassword?: string;
+  setupLink?: string;
+  isNewUser: boolean;
 };
 
 export default function OwnerWorkspaceDetailPage() {
@@ -64,9 +73,23 @@ export default function OwnerWorkspaceDetailPage() {
   const [newApiName, setNewApiName] = useState("");
   const [newApiKey, setNewApiKey] = useState("");
   const [newApiSecret, setNewApiSecret] = useState("");
-  const [newProvider, setNewProvider] = useState<"voice" | "video" | "editing" | "publishing">("voice");
-  const [newProviderKey, setNewProviderKey] = useState("elevenlabs");
+  const [newProvider, setNewProvider] = useState<"script" | "voice" | "video" | "editing" | "publishing">("script");
+  const [newProviderKey, setNewProviderKey] = useState("openai");
   const [isSubmittingApi, setIsSubmittingApi] = useState(false);
+
+  // Add Member form state
+  const [showAddMemberForm, setShowAddMemberForm] = useState(false);
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState<WorkspaceRole>("admin");
+  const [isSubmittingMember, setIsSubmittingMember] = useState(false);
+  const [successInvite, setSuccessInvite] = useState<{
+    email: string;
+    role: string;
+    tempPassword?: string;
+    setupLink?: string;
+    isNewUser: boolean;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,9 +132,12 @@ export default function OwnerWorkspaceDetailPage() {
     }
   };
 
-  const handleProviderChange = (prov: "voice" | "video" | "editing" | "publishing") => {
+  const handleProviderChange = (prov: "script" | "voice" | "video" | "editing" | "publishing") => {
     setNewProvider(prov);
     switch (prov) {
+      case "script":
+        setNewProviderKey("openai");
+        break;
       case "voice":
         setNewProviderKey("elevenlabs");
         break;
@@ -163,6 +189,66 @@ export default function OwnerWorkspaceDetailPage() {
       toast.error(err instanceof ApiError ? err.message : "Failed to add API integration.");
     } finally {
       setIsSubmittingApi(false);
+    }
+  };
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMemberEmail) {
+      toast.error("Please enter email address.");
+      return;
+    }
+    setIsSubmittingMember(true);
+    setSuccessInvite(null);
+    try {
+      const res = await api.post<InviteResult>(`/api/workspaces/${workspaceId}/members`, {
+        email: newMemberEmail.trim(),
+        role: newMemberRole,
+        full_name: newMemberName.trim() || undefined,
+        use_temp_password: true,
+      });
+
+      toast.success(`Member "${newMemberEmail}" successfully invited!`);
+
+      // Update local members list
+      const newMember: MemberWithProfile = {
+        ...res.member,
+        profile: {
+          id: res.member.user_id,
+          email: newMemberEmail.trim().toLowerCase(),
+          full_name: newMemberName.trim() || null,
+          avatar_url: null,
+          phone: null,
+          is_platform_owner: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      };
+
+      if (detail) {
+        setDetail({
+          ...detail,
+          members: [...detail.members, newMember]
+        });
+      }
+
+      setSuccessInvite({
+        email: newMemberEmail.trim(),
+        role: newMemberRole,
+        tempPassword: res.tempPassword,
+        setupLink: res.setupLink,
+        isNewUser: res.isNewUser,
+      });
+
+      // Clear fields
+      setNewMemberEmail("");
+      setNewMemberName("");
+      setNewMemberRole("admin");
+      setShowAddMemberForm(false);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to invite workspace member.");
+    } finally {
+      setIsSubmittingMember(false);
     }
   };
 
@@ -278,10 +364,170 @@ export default function OwnerWorkspaceDetailPage() {
         </div>
 
         {/* Members */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-extrabold text-zinc-900 flex items-center gap-2">
-            <Users size={18} /> Members
-          </h2>
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-extrabold text-zinc-900 flex items-center gap-2">
+              <Users size={18} /> Members
+            </h2>
+            <button
+              onClick={() => {
+                setShowAddMemberForm(!showAddMemberForm);
+                setSuccessInvite(null);
+              }}
+              className="h-8 px-3 bg-brand-green hover:bg-brand-green-hover text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <Plus size={14} strokeWidth={3} />
+              Add Member
+            </button>
+          </div>
+
+          {successInvite && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-left space-y-3">
+              <div className="flex items-center gap-2 text-emerald-800 font-extrabold text-sm">
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                Member Invited Successfully!
+              </div>
+              <p className="text-xs text-emerald-700 font-medium">
+                An invitation has been created for <strong className="text-emerald-900">{successInvite.email}</strong> as a <span className="capitalize">{successInvite.role}</span>.
+              </p>
+
+              <div className="bg-white border border-emerald-100 rounded-xl p-4 space-y-3">
+                {/* Accept Invite Link */}
+                <div className="space-y-1">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wide text-zinc-400">
+                    Invitation Link (share with admin/member)
+                  </span>
+                  <div className="flex items-center justify-between gap-2 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
+                    <code className="text-xs font-mono text-zinc-700 truncate select-all">
+                      {`${typeof window !== "undefined" ? window.location.origin : ""}/auth/accept-invite?email=${encodeURIComponent(successInvite.email)}&workspace=${encodeURIComponent(workspace.name)}&role=${encodeURIComponent(successInvite.role === "admin" ? "Administrator" : successInvite.role)}`}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = `${typeof window !== "undefined" ? window.location.origin : ""}/auth/accept-invite?email=${encodeURIComponent(successInvite.email)}&workspace=${encodeURIComponent(workspace.name)}&role=${encodeURIComponent(successInvite.role === "admin" ? "Administrator" : successInvite.role)}`;
+                        navigator.clipboard?.writeText(url).then(
+                          () => toast.success("Invitation link copied!"),
+                          () => toast.error("Copy failed")
+                        );
+                      }}
+                      className="text-zinc-400 hover:text-brand-green transition-colors shrink-0 cursor-pointer"
+                    >
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Temporary Password */}
+                {successInvite.tempPassword && (
+                  <div className="space-y-1 border-t border-zinc-100 pt-3">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wide text-zinc-400">
+                      Temporary Password
+                    </span>
+                    <div className="flex items-center justify-between gap-2 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
+                      <code className="text-xs font-mono text-zinc-700 truncate select-all">
+                        {successInvite.tempPassword}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(successInvite.tempPassword!).then(
+                            () => toast.success("Temporary password copied!"),
+                            () => toast.error("Copy failed")
+                          );
+                        }}
+                        className="text-zinc-400 hover:text-brand-green transition-colors shrink-0 cursor-pointer"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    </div>
+                    <p className="text-[10px] font-semibold text-amber-600 mt-1 leading-snug">
+                      ⚠️ Please share this password securely with the user. They will be forced to change it on their first login.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSuccessInvite(null)}
+                  className="h-8 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showAddMemberForm && !successInvite && (
+            <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm text-left">
+              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wide border-b border-zinc-100 pb-2 mb-4">
+                Invite Workspace Member
+              </h3>
+              <form onSubmit={handleAddMember} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="admin@company.com"
+                      value={newMemberEmail}
+                      onChange={(e) => setNewMemberEmail(e.target.value)}
+                      className="w-full px-3 h-10 border border-zinc-200 rounded-lg text-xs font-semibold outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase">Full Name (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. John Doe"
+                      value={newMemberName}
+                      onChange={(e) => setNewMemberName(e.target.value)}
+                      className="w-full px-3 h-10 border border-zinc-200 rounded-lg text-xs font-semibold outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase">Workspace Role</label>
+                    <select
+                      value={newMemberRole}
+                      onChange={(e) => setNewMemberRole(e.target.value as WorkspaceRole)}
+                      className="w-full px-3 h-10 border border-zinc-200 rounded-lg text-xs font-semibold outline-none bg-white"
+                    >
+                      <option value="admin">Administrator</option>
+                      <option value="user">User (Video Creator)</option>
+                      <option value="editor">Editor (Video Editor)</option>
+                      <option value="support">Support Agent</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddMemberForm(false);
+                      setSuccessInvite(null);
+                    }}
+                    className="h-9 px-4 border border-zinc-200 hover:bg-zinc-50 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingMember}
+                    className="h-9 px-5 bg-brand-green hover:bg-brand-green-hover disabled:bg-brand-green/60 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  >
+                    {isSubmittingMember ? "Inviting..." : "Send Invitation"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           <div className="bg-white border border-zinc-200 rounded-2xl divide-y divide-zinc-100 overflow-hidden">
             {members.length === 0 && (
               <p className="px-5 py-4 text-sm font-semibold text-zinc-400">No members yet.</p>
@@ -370,9 +616,10 @@ export default function OwnerWorkspaceDetailPage() {
                     <label className="text-[10px] font-extrabold text-zinc-400 uppercase">Provider Type</label>
                     <select
                       value={newProvider}
-                      onChange={(e) => handleProviderChange(e.target.value as any)}
+                      onChange={(e) => handleProviderChange(e.target.value as typeof newProvider)}
                       className="w-full px-3 h-10 border border-zinc-200 rounded-lg text-xs font-semibold outline-none bg-white"
                     >
+                      <option value="script">Script AI (Generation)</option>
                       <option value="voice">Voice AI (Text-to-Speech)</option>
                       <option value="video">Video AI (Avatars)</option>
                       <option value="editing">AI Editing</option>
@@ -387,21 +634,17 @@ export default function OwnerWorkspaceDetailPage() {
                       onChange={(e) => setNewProviderKey(e.target.value)}
                       className="w-full px-3 h-10 border border-zinc-200 rounded-lg text-xs font-semibold outline-none bg-white"
                     >
-                      {newProvider === "voice" && (
+                      {newProvider === "script" && (
                         <>
-                          <option value="elevenlabs">ElevenLabs</option>
-                          <option value="azure_tts">Azure TTS</option>
-                          <option value="google_tts">Google TTS</option>
-                          <option value="polly">Amazon Polly</option>
+                          <option value="openai">OpenAI (priority)</option>
+                          <option value="nvidia">NVIDIA NIM (fallback)</option>
                         </>
                       )}
+                      {newProvider === "voice" && (
+                        <option value="elevenlabs">ElevenLabs</option>
+                      )}
                       {newProvider === "video" && (
-                        <>
-                          <option value="heygen">HeyGen</option>
-                          <option value="synthesia">Synthesia</option>
-                          <option value="d-id">D-ID</option>
-                          <option value="runway">Runway</option>
-                        </>
+                        <option value="heygen">HeyGen</option>
                       )}
                       {newProvider === "editing" && (
                         <option value="submagic">Submagic</option>
@@ -415,6 +658,11 @@ export default function OwnerWorkspaceDetailPage() {
                         </>
                       )}
                     </select>
+                    {newProvider === "script" && (
+                      <p className="text-[10px] font-semibold text-zinc-400 leading-snug pt-0.5">
+                        OpenAI is used first. If no OpenAI key is set, scripts fall back to NVIDIA NIM.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1">

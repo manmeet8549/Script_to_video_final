@@ -2,8 +2,17 @@ import { z } from "zod";
 import { guard, jsonError, jsonOk, parseBody, requireApiMember } from "@/lib/api/http";
 import { getProject } from "@/lib/dal/projects";
 import { generateVoice, getLatestVoice } from "@/lib/dal/pipeline";
+import { toProxyUrl } from "@/lib/storage/media";
 
 type Ctx = { params: Promise<{ projectId: string }> };
+
+function withProxyAudio<T extends { audio_url?: string | null } | null>(voice: T): T {
+  if (!voice) return voice;
+  return {
+    ...voice,
+    audio_url: toProxyUrl(voice.audio_url),
+  };
+}
 
 export async function GET(_request: Request, ctx: Ctx) {
   return guard(async () => {
@@ -11,7 +20,7 @@ export async function GET(_request: Request, ctx: Ctx) {
     if (!auth.ok) return auth.response;
     const { projectId } = await ctx.params;
     if (!(await getProject(projectId))) return jsonError("Project not found", 404);
-    return jsonOk(await getLatestVoice(projectId));
+    return jsonOk(withProxyAudio(await getLatestVoice(projectId)));
   });
 }
 
@@ -36,6 +45,6 @@ export async function POST(request: Request, ctx: Ctx) {
       text: body.data.text,
       settings: body.data.settings,
     });
-    return jsonOk(voice, { status: 201 });
+    return jsonOk(withProxyAudio(voice), { status: 201 });
   });
 }

@@ -14,6 +14,8 @@ import {
   Bell,
   HelpCircle,
   Shield,
+  CheckSquare,
+  Coins,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarUserCard, TopbarUserMenu } from "@/components/sidebar-user-card";
@@ -63,6 +65,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: "All Members", href: "/dashboard/admin/team", icon: <Users size={16} />, badge: membersCount !== null ? String(membersCount) : undefined },
     { label: "Users", href: "/dashboard/admin/team/users", icon: <User size={16} />, badge: usersCount !== null ? String(usersCount) : undefined },
     { label: "Editors", href: "/dashboard/admin/team/editors", icon: <PenTool size={16} />, badge: editorsCount !== null ? String(editorsCount) : undefined },
+    { category: "PUBLISHING" },
+    { label: "Approval Queue", href: "/dashboard/admin/approvals", icon: <CheckSquare size={16} /> },
+    { category: "BILLING" },
+    { label: "Credits", href: "/dashboard/admin/credits", icon: <Coins size={16} /> },
     { category: "CALENDAR" },
     { label: "Schedule & Deadlines", href: "/dashboard/admin/calendar", icon: <CalendarDays size={16} /> },
   ];

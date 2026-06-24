@@ -65,7 +65,13 @@ export const heygen: VideoProvider = {
         { headers: { "X-Api-Key": cred.apiKey } },
       );
       const json = (await res.json().catch(() => ({}))) as {
-        data?: { status?: string; video_url?: string; duration?: number; error?: unknown };
+        data?: {
+          status?: string;
+          video_url?: string;
+          thumbnail_url?: string;
+          duration?: number;
+          error?: unknown;
+        };
       };
       const status = json.data?.status;
       if (status === "completed") {
@@ -73,6 +79,7 @@ export const heygen: VideoProvider = {
           status: "completed",
           providerJobId,
           resultUrl: json.data?.video_url,
+          thumbnailUrl: json.data?.thumbnail_url,
           durationSeconds: json.data?.duration,
           raw: json,
         };

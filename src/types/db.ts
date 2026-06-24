@@ -18,10 +18,20 @@ export type StageName = "idea" | "script" | "voice" | "video" | "editing" | "rev
 export type StageStatus = "pending" | "in_progress" | "completed" | "failed" | "skipped";
 export type GenerationStatus = "pending" | "generating" | "completed" | "failed";
 export type EditType = "ai" | "manual";
-export type EditStatus = "pending" | "in_progress" | "review" | "completed" | "rejected";
+export type EditStatus =
+  | "pending"
+  | "in_progress"
+  | "review"
+  | "under_review"
+  | "revision_requested"
+  | "approved"
+  | "completed"
+  | "rejected";
 export type PublishStatus = "draft" | "scheduled" | "publishing" | "published" | "failed";
 export type Visibility = "public" | "unlisted" | "private";
-export type ProviderKind = "voice" | "video" | "editing" | "publishing";
+export type ProviderKind = "script" | "voice" | "video" | "editing" | "publishing";
+export type CreditKind = "script" | "voice" | "video" | "publish";
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "changes_requested";
 
 export type Profile = {
   id: string;
@@ -146,6 +156,14 @@ export type VideoGeneration = {
   provider_job_id: string | null;
   settings: Record<string, unknown>;
   error: string | null;
+  thumbnail_url: string | null;
+  r2_key: string | null;
+  thumbnail_r2_key: string | null;
+  file_size_bytes: number | null;
+  duration_seconds: number | null;
+  width: number | null;
+  height: number | null;
+  version: number;
   created_at: string;
   updated_at: string;
 }
@@ -187,6 +205,56 @@ export type PublishingTask = {
   settings: Record<string, unknown>;
   error: string | null;
   created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CreditWallet = {
+  id: string;
+  workspace_id: string;
+  script_credits: number;
+  voice_credits: number;
+  video_credits: number;
+  publish_credits: number;
+  storage_limit_gb: number;
+  storage_used_bytes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CreditTransaction = {
+  id: string;
+  workspace_id: string;
+  project_id: string | null;
+  kind: CreditKind;
+  amount: number;
+  balance_after: number | null;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type EditedVideo = {
+  id: string;
+  editing_task_id: string;
+  version: number;
+  video_url: string | null;
+  r2_key: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type ApprovalItem = {
+  id: string;
+  workspace_id: string;
+  project_id: string | null;
+  publishing_task_id: string | null;
+  status: ApprovalStatus;
+  requested_by: string | null;
+  decided_by: string | null;
+  feedback: string | null;
+  decided_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -257,6 +325,26 @@ export type Database = {
         PublishingTask,
         Insertable<PublishingTask, "project_id" | "platform">,
         Partial<PublishingTask>
+      >;
+      credit_wallets: TableDef<
+        CreditWallet,
+        Insertable<CreditWallet, "workspace_id">,
+        Partial<CreditWallet>
+      >;
+      credit_transactions: TableDef<
+        CreditTransaction,
+        Insertable<CreditTransaction, "workspace_id" | "kind" | "amount">,
+        Partial<CreditTransaction>
+      >;
+      edited_videos: TableDef<
+        EditedVideo,
+        Insertable<EditedVideo, "editing_task_id">,
+        Partial<EditedVideo>
+      >;
+      approval_items: TableDef<
+        ApprovalItem,
+        Insertable<ApprovalItem, "workspace_id">,
+        Partial<ApprovalItem>
       >;
       notifications: TableDef<
         Notification,

@@ -2,6 +2,8 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { webhookSecret } from "@/lib/env";
+import { fetchAndStoreVideo } from "@/lib/storage/video-backfill";
+import { recordCreditUsage, addStorageUsage } from "@/lib/dal/credits";
 
 // Webhooks run without a user session, so all DB work here uses the service-role
 // client. Authenticity is established by a shared-secret header (when configured).
@@ -52,6 +54,8 @@ export async function completeVideoByJob(
   status: "completed" | "failed",
   videoUrl?: string,
   error?: string,
+  thumbnailUrl?: string,
+  durationSeconds?: number,
 ): Promise<boolean> {
   const admin = createAdminClient();
   const { data: row } = await admin
@@ -62,21 +66,58 @@ export async function completeVideoByJob(
     .single();
   if (!row) return false;
 
+  if (status === "failed") {
+    await admin
+      .from("video_generations")
+      .update({ status: "failed", video_url: null, error: error ?? "Generation failed" })
+      .eq("id", row.id);
+    await markStage(row.project_id, "video", "failed");
+    return true;
+  }
+
+  // Resolve the owning workspace, then back-fill the render into R2.
+  const { data: project } = await admin
+    .from("projects")
+    .select("workspace_id")
+    .eq("id", row.project_id)
+    .single();
+  const workspaceId = project?.workspace_id as string | undefined;
+  const dimension = (row.settings?.dimension as { width?: number; height?: number }) ?? {};
+
+  const stored =
+    videoUrl && workspaceId
+      ? await fetchAndStoreVideo(workspaceId, row.project_id, videoUrl, thumbnailUrl)
+      : null;
+  const finalVideoUrl = stored?.videoUrl ?? videoUrl ?? null;
+  const finalThumbUrl = stored?.thumbnailUrl ?? thumbnailUrl ?? null;
+
   await admin
     .from("video_generations")
     .update({
-      status,
-      video_url: status === "completed" ? videoUrl ?? null : null,
-      error: status === "failed" ? error ?? "Generation failed" : null,
+      status: "completed",
+      video_url: finalVideoUrl,
+      thumbnail_url: finalThumbUrl,
+      r2_key: stored?.r2Key ?? null,
+      thumbnail_r2_key: stored?.thumbnailR2Key ?? null,
+      file_size_bytes: stored?.fileSizeBytes ?? null,
+      duration_seconds: durationSeconds ?? null,
+      width: dimension.width ?? null,
+      height: dimension.height ?? null,
     })
     .eq("id", row.id);
 
-  await markStage(row.project_id, "video", status);
-  if (status === "completed") {
-    await admin
-      .from("projects")
-      .update({ status: "editing", video_url: videoUrl ?? null })
-      .eq("id", row.project_id);
+  await markStage(row.project_id, "video", "completed");
+  await admin
+    .from("projects")
+    .update({ status: "editing", video_url: finalVideoUrl, thumbnail_url: finalThumbUrl })
+    .eq("id", row.project_id);
+
+  if (workspaceId) {
+    await recordCreditUsage(workspaceId, "video", {
+      projectId: row.project_id,
+      reason: "Avatar video render",
+    });
+    if (stored?.fileSizeBytes) await addStorageUsage(workspaceId, stored.fileSizeBytes);
   }
   return true;
 }

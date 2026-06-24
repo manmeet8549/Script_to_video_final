@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
+import { api, ApiError } from "@/lib/api/client";
 import {
   getStoredProjectById,
   updateStoredProject,
@@ -72,25 +73,43 @@ export default function UserPublishPage({ params }: { params: Promise<{ projectI
   const [isPublishing, setIsPublishing] = useState(false);
 
   useEffect(() => {
-    const proj = getStoredProjectById(projectId);
-    if (proj) {
-      setProject(proj);
-      if (proj.youtubeTitle) {
-        setTitle(proj.youtubeTitle);
-      } else if (proj.name) {
-        setTitle(proj.name);
+    async function loadProject() {
+      let proj = getStoredProjectById(projectId);
+      if (!proj) {
+        try {
+          const dbProj = await api.get<any>(`/api/projects/${projectId}`);
+          if (dbProj) {
+            proj = updateStoredProject(projectId, {
+              name: dbProj.title,
+              priority: dbProj.priority === "urgent" || dbProj.priority === "high" ? "High" : dbProj.priority === "medium" ? "Medium" : "Low",
+              progress: dbProj.progress_percent || 20,
+              stage: "Export",
+            });
+          }
+        } catch (err) {
+          console.error("Failed to load project from DB:", err);
+        }
       }
+      if (proj) {
+        setProject(proj);
+        if (proj.youtubeTitle) {
+          setTitle(proj.youtubeTitle);
+        } else if (proj.name) {
+          setTitle(proj.name);
+        }
 
-      if (proj.youtubeDescription) {
-        setDescription(proj.youtubeDescription);
-      } else if (proj.generatedScriptText) {
-        setDescription(proj.generatedScriptText);
-      }
+        if (proj.youtubeDescription) {
+          setDescription(proj.youtubeDescription);
+        } else if (proj.generatedScriptText) {
+          setDescription(proj.generatedScriptText);
+        }
 
-      if (proj.youtubeTags && proj.youtubeTags.length > 0) {
-        setTags(proj.youtubeTags);
+        if (proj.youtubeTags && proj.youtubeTags.length > 0) {
+          setTags(proj.youtubeTags);
+        }
       }
     }
+    loadProject();
   }, [projectId]);
 
   const handleTogglePlatform = (platform: PlatformKey) => {

@@ -16,10 +16,25 @@ export type JobResult = {
   status: "completed" | "generating" | "failed";
   providerJobId?: string;
   resultUrl?: string;
+  thumbnailUrl?: string;
   durationSeconds?: number;
   error?: string;
   raw?: unknown;
 };
+
+export interface ScriptProvider {
+  readonly key: string;
+  generateScript(
+    cred: ProviderCredential,
+    input: {
+      topic: string;
+      tone?: string;
+      language?: string;
+      targetDuration?: string;
+      instructions?: string;
+    },
+  ): Promise<{ status: "completed" | "failed"; content?: string; error?: string }>;
+}
 
 export interface VoiceProvider {
   readonly key: string;
@@ -27,6 +42,9 @@ export interface VoiceProvider {
     cred: ProviderCredential,
     input: { text: string; voiceId: string; settings?: Record<string, unknown> },
   ): Promise<{ status: "completed" | "failed"; audio?: ArrayBuffer; contentType?: string; error?: string }>;
+  // Optional accessibility check: returns true when the voice id is reachable
+  // with the given credential. Used to trigger recovery to a default voice.
+  verifyVoice?(cred: ProviderCredential, voiceId: string): Promise<boolean>;
 }
 
 export interface VideoProvider {

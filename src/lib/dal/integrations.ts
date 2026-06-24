@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/secrets";
 import type { ProviderCredential } from "@/lib/integrations/types";
 import type { ProviderKind, WorkspaceApi } from "@/types/db";
@@ -70,7 +71,7 @@ export async function resolveCredential(
   provider: ProviderKind,
   providerKey?: string,
 ): Promise<{ api: WorkspaceApi; credential: ProviderCredential } | null> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   let query = supabase
     .from("workspace_apis")
     .select("*")

@@ -13,7 +13,7 @@ export async function GET() {
 }
 
 const saveSchema = z.object({
-  provider: z.enum(["voice", "video", "editing", "publishing"]),
+  provider: z.enum(["script", "voice", "video", "editing", "publishing"]),
   provider_key: z.string().min(1),
   api_name: z.string().min(1).max(80),
   api_key: z.string().min(1),

@@ -27,9 +27,29 @@ export interface UserProject {
   voiceSpeed?: string;
   voicePitch?: string;
 
+  // ElevenLabs Advanced Settings
+  elevenlabsModel?: string;
+  elevenlabsStability?: number;
+  elevenlabsSimilarityBoost?: number;
+  elevenlabsStyle?: number;
+  elevenlabsUseSpeakerBoost?: boolean;
+  elevenlabsSpeedMultiplier?: number;
+  elevenlabsOutputFormat?: string;
+  elevenlabsOptimizeLatency?: number;
+
   selectedAvatar?: string;
   selectedBg?: string;
   resolution?: string;
+
+  // Video Generation Settings
+  videoAspectRatio?: string;
+  videoCameraFrame?: string;
+  videoSubtitleStyle?: string;
+  videoSubtitlePosition?: string;
+  videoBgMusic?: string;
+  videoBgMusicVolume?: number;
+  videoCustomAvatarId?: string;
+  generatedVideoUrl?: string;
 
   editMethod?: "AI" | "Human" | null;
   aiInstructions?: string;
@@ -521,10 +541,30 @@ export const getStoredProjectById = (id: string): UserProject | undefined => {
   return projects.find((p) => p.id === id);
 };
 
-export const updateStoredProject = (id: string, updates: Partial<UserProject>): UserProject | undefined => {
+export const updateStoredProject = (id: string, updates: Partial<UserProject>): UserProject => {
   const projects = getStoredProjects();
   const index = projects.findIndex((p) => p.id === id);
-  if (index === -1) return undefined;
+  if (index === -1) {
+    const newProj: UserProject = {
+      id,
+      name: updates.name || "New Project",
+      projectId: id.slice(0, 8).toUpperCase(),
+      priority: updates.priority || "Medium",
+      priorityColor: updates.priorityColor || "bg-amber-50 text-amber-700 border-amber-100",
+      status: updates.status || "In Progress",
+      statusColor: updates.statusColor || "bg-zinc-100 text-zinc-800",
+      stage: updates.stage || "AI Script Gen",
+      dueDate: updates.dueDate || "Due soon",
+      progress: updates.progress || 20,
+      created: updates.created || new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
+      lastUpdated: "Just now",
+      creator: updates.creator || "User",
+      ...updates,
+    };
+    projects.push(newProj);
+    saveStoredProjects(projects);
+    return newProj;
+  }
   
   const updatedProj = { ...projects[index], ...updates };
   projects[index] = updatedProj;

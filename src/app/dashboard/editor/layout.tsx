@@ -51,6 +51,7 @@ export default function EditorLayout({ children }: { children: React.ReactNode }
   const navItems = [
     { label: "Dashboard", href: "/dashboard/editor", icon: <LayoutDashboard size={16} /> },
     { category: "TASKS" },
+    { label: "My Assignments", href: "/dashboard/editor/assignments", icon: <Inbox size={16} /> },
     { label: "Pending Requests", href: "/dashboard/editor/tasks?status=pending", icon: <Inbox size={16} /> },
     { label: "In Progress", href: "/dashboard/editor/tasks?status=in_progress", icon: <Loader2 size={16} /> },
     { label: "Under Review", href: "/dashboard/editor/tasks?status=review", icon: <Eye size={16} /> },
