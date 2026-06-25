@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { guard, jsonError, jsonOk, parseBody, requireApiMember } from "@/lib/api/http";
+import { getMemberships } from "@/lib/dal/auth";
 import { deleteProject, getProject, updateProject, ProjectUpdateForbidden } from "@/lib/dal/projects";
 
 type Ctx = { params: Promise<{ projectId: string }> };
@@ -36,8 +37,22 @@ export async function PATCH(request: Request, ctx: Ctx) {
     if (!auth.ok) return auth.response;
     const { projectId } = await ctx.params;
 
+    // getProject is RLS-scoped, so a returned row proves the caller can see this
+    // project — i.e. it lives in one of their workspaces.
     const existing = await getProject(projectId);
     if (!existing) return jsonError("Project not found", 404);
+
+    // Authorize against the project's OWN workspace (not just the active one):
+    // any owner/admin/user member of it, or the assigned editor, may update.
+    const roleHere = (await getMemberships()).find(
+      (m) => m.workspace_id === existing.workspace_id,
+    )?.role;
+    const canUpdate =
+      (roleHere != null && ["owner", "admin", "user"].includes(roleHere)) ||
+      existing.assigned_to === auth.user.id;
+    if (!canUpdate) {
+      return jsonError("You don't have permission to update this project", 403);
+    }
 
     const body = await parseBody(request, patchSchema);
     if (!body.ok) return body.response;

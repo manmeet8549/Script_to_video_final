@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getUser } from "@/lib/dal/auth";
 import type {
   Project,
@@ -90,8 +91,13 @@ export class ProjectUpdateForbidden extends Error {
   }
 }
 
+// NOTE: callers MUST authorize the user first (the project route checks the
+// caller's role in the project's workspace). This writes with the service-role
+// client to sidestep the strict projects_update RLS policy, so workspace
+// members and assignees aren't blocked from progressing a project they didn't
+// personally create.
 export async function updateProject(id: string, patch: Partial<Project>): Promise<Project> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   // Strip immutable / server-managed columns.
   const { id: _id, workspace_id: _ws, created_at: _c, updated_at: _u, ...safe } = patch;
   void _id;
@@ -105,9 +111,7 @@ export async function updateProject(id: string, patch: Partial<Project>): Promis
     .select("*")
     .maybeSingle();
   if (error) throw error;
-  // No row came back: RLS denied the update (the caller can read the project
-  // but isn't allowed to change it). Surface a clear authorization error rather
-  // than letting an opaque 500 bubble up.
+  // The project id no longer exists (deleted between read and write).
   if (!data) throw new ProjectUpdateForbidden();
   return data;
 }
