@@ -1,6 +1,5 @@
 import { guard, jsonError, jsonOk, requireApiUser, parseBody } from "@/lib/api/http";
 import { getWorkspaceDetail } from "@/lib/dal/workspaces";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -16,39 +15,24 @@ export async function GET(
     const detail = await getWorkspaceDetail(workspaceId);
     if (!detail) return jsonError("Workspace not found", 404);
 
-    // Filter member passwords based on caller's role in this workspace
+    // Only ever DISPLAY a temp password stored at invite time, gated by the
+    // caller's role. Never reset a member's auth password here: resetting via
+    // the admin API revokes that user's sessions — including the owner's own
+    // row in this list — which logged the owner out and 401'd their next call.
     const callerRole = detail.role;
-    const adminClient = createAdminClient();
 
-    detail.members = await Promise.all(
-      detail.members.map(async (m) => {
-        const profile = m.profile ? { ...m.profile } : null;
-        if (profile) {
-          if (!profile.password_plain) {
-            const emailPrefix = profile.email.split("@")[0];
-            const fallback = `${emailPrefix}123!`;
-            
-            try {
-              // Sync password in Supabase Auth via admin client
-              await adminClient.auth.admin.updateUserById(m.user_id, { password: fallback });
-              // Save plaintext password to profiles database table
-              await adminClient.from("profiles").update({ password_plain: fallback }).eq("id", m.user_id);
-            } catch {
-              // Ignore errors
-            }
-            profile.password_plain = fallback;
-          }
-
-          const canSee =
-            callerRole === "owner" ||
-            (callerRole === "admin" && (m.role === "user" || m.role === "editor"));
-          if (!canSee) {
-            delete profile.password_plain;
-          }
+    detail.members = detail.members.map((m) => {
+      const profile = m.profile ? { ...m.profile } : null;
+      if (profile && profile.password_plain) {
+        const canSee =
+          callerRole === "owner" ||
+          (callerRole === "admin" && (m.role === "user" || m.role === "editor"));
+        if (!canSee) {
+          delete profile.password_plain;
         }
-        return { ...m, profile };
-      })
-    );
+      }
+      return { ...m, profile };
+    });
 
     return jsonOk(detail);
   });
