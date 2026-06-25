@@ -2,6 +2,10 @@ import { z } from "zod";
 import { guard, jsonError, jsonOk, parseBody, requireApiMember } from "@/lib/api/http";
 import { generateScriptText, ScriptProviderError } from "@/lib/dal/pipeline";
 
+// LLM generation can run well past the default function limit; give Vercel
+// headroom so a slow model finishes instead of the function being killed.
+export const maxDuration = 60;
+
 const generateSchema = z.object({
   topic: z.string().min(1, "A topic or title is required").max(300),
   tone: z.string().max(40).optional(),

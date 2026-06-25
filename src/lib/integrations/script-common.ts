@@ -83,7 +83,15 @@ export async function callChatCompletion(
 ): Promise<{ status: "completed" | "failed"; content?: string; error?: string }> {
   const root = (cred.endpointUrl?.replace(/\/$/, "") || baseUrl).replace(/\/$/, "");
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  // LLM generation regularly runs longer than the old 30s cap (large models /
+  // cold starts). Keep this under the route's maxDuration so we time out with a
+  // clear message instead of Vercel killing the function.
+  const TIMEOUT_MS = 55000;
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, TIMEOUT_MS);
   try {
     const res = await fetch(`${root}/chat/completions`, {
       method: "POST",
@@ -120,6 +128,9 @@ export async function callChatCompletion(
     return { status: "completed", content };
   } catch (err) {
     clearTimeout(timeoutId);
+    if (timedOut) {
+      return { status: "failed", error: `the model took longer than ${TIMEOUT_MS / 1000}s to respond (try a faster model)` };
+    }
     return { status: "failed", error: err instanceof Error ? err.message : "Request failed" };
   }
 }

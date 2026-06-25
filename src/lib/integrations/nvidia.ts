@@ -10,7 +10,9 @@ export const nvidiaNim: ScriptProvider = {
   key: "nvidia",
 
   generateScript(cred: ProviderCredential, input) {
-    const model = (cred.config?.model as string) || "meta/llama-3.3-70b-instruct";
+    // Default to a small, fast model so script generation returns well within
+    // the request timeout. Override per-workspace via config.model for quality.
+    const model = (cred.config?.model as string) || "meta/llama-3.1-8b-instruct";
     return callChatCompletion(
       cred,
       "https://integrate.api.nvidia.com/v1",
