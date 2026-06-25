@@ -83,6 +83,13 @@ export async function createProject(input: {
   return project;
 }
 
+export class ProjectUpdateForbidden extends Error {
+  constructor() {
+    super("You don't have permission to update this project");
+    this.name = "ProjectUpdateForbidden";
+  }
+}
+
 export async function updateProject(id: string, patch: Partial<Project>): Promise<Project> {
   const supabase = await createClient();
   // Strip immutable / server-managed columns.
@@ -96,8 +103,12 @@ export async function updateProject(id: string, patch: Partial<Project>): Promis
     .update(safe)
     .eq("id", id)
     .select("*")
-    .single();
+    .maybeSingle();
   if (error) throw error;
+  // No row came back: RLS denied the update (the caller can read the project
+  // but isn't allowed to change it). Surface a clear authorization error rather
+  // than letting an opaque 500 bubble up.
+  if (!data) throw new ProjectUpdateForbidden();
   return data;
 }
 

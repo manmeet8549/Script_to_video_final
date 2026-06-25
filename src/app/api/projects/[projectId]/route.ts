@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { guard, jsonError, jsonOk, parseBody, requireApiMember } from "@/lib/api/http";
-import { deleteProject, getProject, updateProject } from "@/lib/dal/projects";
+import { deleteProject, getProject, updateProject, ProjectUpdateForbidden } from "@/lib/dal/projects";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -42,8 +42,13 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const body = await parseBody(request, patchSchema);
     if (!body.ok) return body.response;
 
-    const updated = await updateProject(projectId, body.data);
-    return jsonOk(updated);
+    try {
+      const updated = await updateProject(projectId, body.data);
+      return jsonOk(updated);
+    } catch (err) {
+      if (err instanceof ProjectUpdateForbidden) return jsonError(err.message, 403);
+      throw err;
+    }
   });
 }
 
