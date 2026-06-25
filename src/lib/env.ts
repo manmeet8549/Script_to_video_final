@@ -15,7 +15,18 @@ function required(name: string, value: string | undefined): string {
 // Public (safe to expose to the browser).
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+// Base URL the app is served from — used to build OAuth callback URLs (server
+// side only). Precedence: explicit override → Vercel's stable production domain
+// → localhost for dev. VERCEL_PROJECT_PRODUCTION_URL is the fixed production
+// hostname (e.g. "script-to-video-final.vercel.app"), so OAuth allowlists stay
+// valid across deploys; VERCEL_URL is intentionally not used (it changes per
+// deployment).
+export const APP_URL = (
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000")
+).replace(/\/$/, "");
 
 export function publicSupabaseConfig() {
   return {
