@@ -25,18 +25,27 @@ export async function POST(
 
     const { workspaceId } = await ctx.params;
 
-    // Authorize against this specific workspace. RLS lets a user read their own
-    // membership row; we require an active owner/admin role on it.
+    // Authorize against this specific workspace. A platform owner or the
+    // workspace's owner_id can always manage members (matching the workspaces
+    // RLS write policy); otherwise require an active owner/admin membership row.
     const supabase = await createClient();
-    const { data: membership } = await supabase
-      .from("workspace_members")
-      .select("role")
-      .eq("workspace_id", workspaceId)
-      .eq("user_id", auth.user.id)
-      .eq("status", "active")
-      .maybeSingle();
+    const [{ data: profile }, { data: workspace }, { data: membership }] = await Promise.all([
+      supabase.from("profiles").select("is_platform_owner").eq("id", auth.user.id).single(),
+      supabase.from("workspaces").select("owner_id").eq("id", workspaceId).maybeSingle(),
+      supabase
+        .from("workspace_members")
+        .select("role")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", auth.user.id)
+        .eq("status", "active")
+        .maybeSingle(),
+    ]);
 
-    if (!membership || !["owner", "admin"].includes(membership.role)) {
+    const isPlatformOwner = profile?.is_platform_owner ?? false;
+    const isWorkspaceOwner = workspace?.owner_id === auth.user.id;
+    const isMemberAdmin = !!membership && ["owner", "admin"].includes(membership.role);
+
+    if (!isPlatformOwner && !isWorkspaceOwner && !isMemberAdmin) {
       return jsonError("You don't have permission to invite members to this workspace", 403);
     }
 
