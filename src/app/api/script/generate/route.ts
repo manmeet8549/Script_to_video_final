@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { guard, jsonError, jsonOk, parseBody, requireApiMember } from "@/lib/api/http";
-import { generateScriptText } from "@/lib/dal/pipeline";
+import { generateScriptText, ScriptProviderError } from "@/lib/dal/pipeline";
 
 const generateSchema = z.object({
   topic: z.string().min(1, "A topic or title is required").max(300),
@@ -31,9 +31,13 @@ export async function POST(request: Request) {
       return jsonOk(result, { status: 201 });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Script generation failed";
-      // Provider not configured is a client-fixable condition → 400, not 500.
+      // Provider not configured is a client-fixable condition → 400.
       const isConfig = msg.includes("No script provider") || msg.includes("Unsupported script provider");
-      return jsonError(msg, isConfig ? 400 : 500);
+      if (isConfig) return jsonError(msg, 400);
+      // The provider accepted but failed the request (bad key/quota/model) → 502.
+      if (err instanceof ScriptProviderError) return jsonError(msg, 502);
+      // Anything else is a genuine server fault.
+      return jsonError(msg, 500);
     }
   });
 }

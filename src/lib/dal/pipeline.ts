@@ -38,6 +38,17 @@ import type {
 
 // ---------------------------------------------------------------- scripts ----
 
+// The configured AI provider accepted the request but rejected/failed it (bad
+// key, exhausted quota, no model access, timeout). It's a provider/config
+// problem the workspace owner can fix — not a platform bug — so routes map this
+// to 502 rather than an opaque 500.
+export class ScriptProviderError extends Error {
+  constructor(detail: string) {
+    super(`The AI script provider rejected the request: ${detail}. Check the script API key, billing, and model in workspace API settings.`);
+    this.name = "ScriptProviderError";
+  }
+}
+
 // Generate a script with the workspace's configured AI provider. OpenAI is the
 // priority provider; if no active OpenAI key is configured, fall back to NVIDIA
 // NIM. Returns the generated text plus which provider produced it. Does not
@@ -70,7 +81,7 @@ export async function generateScriptText(
 
   const result = await provider.generateScript(resolved.credential, input);
   if (result.status === "failed" || !result.content) {
-    throw new Error(result.error || "Script generation failed.");
+    throw new ScriptProviderError(result.error || "no script returned");
   }
 
   const wordCount = result.content.trim().split(/\s+/).filter(Boolean).length;
