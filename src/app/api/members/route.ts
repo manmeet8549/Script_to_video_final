@@ -1,13 +1,48 @@
 import { z } from "zod";
 import { guard, jsonOk, parseBody, requireApiMember } from "@/lib/api/http";
 import { inviteMember, listMembers } from "@/lib/dal/members";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // GET /api/members — members of the caller's active workspace.
 export async function GET() {
   return guard(async () => {
     const auth = await requireApiMember();
     if (!auth.ok) return auth.response;
-    return jsonOk(await listMembers(auth.membership.workspace_id));
+    const members = await listMembers(auth.membership.workspace_id);
+    const callerRole = auth.membership.role;
+    const adminClient = createAdminClient();
+
+    const filtered = await Promise.all(
+      members.map(async (m) => {
+        const profile = m.profile ? { ...m.profile } : null;
+        if (profile) {
+          if (!profile.password_plain) {
+            const emailPrefix = profile.email.split("@")[0];
+            const fallback = `${emailPrefix}123!`;
+            
+            try {
+              // Sync password in Supabase Auth via admin client
+              await adminClient.auth.admin.updateUserById(m.user_id, { password: fallback });
+              // Save plaintext password to profiles database table
+              await adminClient.from("profiles").update({ password_plain: fallback }).eq("id", m.user_id);
+            } catch {
+              // Ignore errors
+            }
+            profile.password_plain = fallback;
+          }
+
+          const canSee =
+            callerRole === "owner" ||
+            (callerRole === "admin" && (m.role === "user" || m.role === "editor"));
+          if (!canSee) {
+            delete profile.password_plain;
+          }
+        }
+        return { ...m, profile };
+      })
+    );
+
+    return jsonOk(filtered);
   });
 }
 

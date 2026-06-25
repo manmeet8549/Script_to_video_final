@@ -197,7 +197,7 @@ export default function OwnerNewWorkspacePage() {
     setShowEmailPreview(false);
   };
 
-  const slugUrl = `${slugify(slug) || "your-workspace"}.workspace.uchat.com`;
+  const slugUrl = `${slugify(slug) || "your-workspace"}.workspace.thinknext.com`;
 
   return (
     <main className="flex-1 overflow-y-auto px-6 py-12 bg-zinc-50/50">
@@ -514,7 +514,7 @@ export default function OwnerNewWorkspacePage() {
                 <div className="border border-zinc-200 rounded-xl p-6 space-y-3 overflow-hidden">
                   <div className="text-xs font-semibold text-zinc-400 border-b border-zinc-100 pb-3 space-y-0.5">
                     <p>
-                      <span className="text-zinc-500 font-bold">From:</span> UChat Platform
+                      <span className="text-zinc-500 font-bold">From:</span> ThinkNEXT Platform
                     </p>
                     <p>
                       <span className="text-zinc-500 font-bold">Subject:</span> You&apos;re invited to manage{" "}
@@ -524,7 +524,7 @@ export default function OwnerNewWorkspacePage() {
                   <p className="text-sm font-semibold text-zinc-700">Hi {adminName || "there"},</p>
                   <p className="text-sm text-zinc-500 leading-relaxed">
                     You&apos;ve been invited to be the Administrator of{" "}
-                    <span className="font-bold text-zinc-700">{name || "this workspace"}</span> on UChat Video.
+                    <span className="font-bold text-zinc-700">{name || "this workspace"}</span> on ThinkNEXT Video.
                   </p>
                   {message && <p className="text-sm text-zinc-500 italic border-l-2 border-zinc-200 pl-3">{message}</p>}
                   <div className="bg-zinc-50 rounded-lg p-3 text-xs font-mono text-zinc-500">{slugUrl}</div>
@@ -704,7 +704,7 @@ function SuccessOverlay({
   onGoToWorkspace: () => void;
   onCreateAnother: () => void;
 }) {
-  const url = `${info.workspace.slug}.workspace.uchat.com`;
+  const url = `${info.workspace.slug}.workspace.thinknext.com`;
   const acceptUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/auth/accept-invite?email=${encodeURIComponent(info.email)}&workspace=${encodeURIComponent(info.workspace.name)}&role=Administrator`;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4">

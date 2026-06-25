@@ -20,7 +20,7 @@ type SubmagicProject = {
 
 function mapProject(json: SubmagicProject, httpOk: boolean): JobResult {
   if (!httpOk) {
-    return { status: "failed", error: json.error || json.message || "Submagic request failed", raw: json };
+    return { status: "failed", error: json.message || json.error || "Submagic request failed", raw: json };
   }
   const jobId = json.id || json.projectId;
   const url = json.outputUrl || json.downloadUrl || json.videoUrl;
@@ -30,7 +30,7 @@ function mapProject(json: SubmagicProject, httpOk: boolean): JobResult {
     return { status: "completed", providerJobId: jobId, resultUrl: url, raw: json };
   }
   if (s === "failed" || s === "error") {
-    return { status: "failed", providerJobId: jobId, error: json.error || json.message, raw: json };
+    return { status: "failed", providerJobId: jobId, error: json.message || json.error, raw: json };
   }
   return { status: "generating", providerJobId: jobId, raw: json };
 }
@@ -48,7 +48,7 @@ export const submagic: EditProvider = {
           title: (input.settings?.title as string) || "AI Edit",
           language: (input.settings?.language as string) || "en",
           videoUrl: input.sourceVideoUrl,
-          templateName: (input.settings?.template as string) || (cred.config?.template as string),
+          templateName: (input.settings?.templateName as string) || (input.settings?.template as string) || (cred.config?.templateName as string) || (cred.config?.template as string) || "Hormozi 1",
           ...input.settings,
         }),
       });

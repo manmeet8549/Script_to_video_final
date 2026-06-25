@@ -10,8 +10,12 @@ import {
   MoreVertical,
   X,
   Loader2,
+  UserCheck,
+  Clapperboard,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
+import SendToEditorModal from "@/components/SendToEditorModal";
 
 
 
@@ -26,6 +30,10 @@ export default function UserProjectsPage() {
   const [newProjectPriority, setNewProjectPriority] = useState<"High" | "Medium" | "Low">("Medium");
   const [newProjectStage, setNewProjectStage] = useState("AI Script Gen");
   const [isCreating, setIsCreating] = useState(false);
+
+  // Dropdown card menu & Send to Editor Modal state
+  const [activeMenuProjectId, setActiveMenuProjectId] = useState<string | null>(null);
+  const [selectedProjectForEditor, setSelectedProjectForEditor] = useState<{ id: string; videoUrl?: string | null } | null>(null);
 
   // Projects list state
   const [projects, setProjects] = useState<ProjectCardView[]>([]);
@@ -239,22 +247,73 @@ export default function UserProjectsPage() {
                 <div
                   key={p.id}
                   onClick={() => handleCardClick(p.id)}
-                  className="bg-white border border-zinc-200 hover:border-brand-green hover:shadow-xs rounded-2xl p-5 shadow-2xs transition-all cursor-pointer text-left space-y-4 flex flex-col justify-between"
+                  className="relative bg-white border border-zinc-200 hover:border-brand-green hover:shadow-xs rounded-2xl p-5 shadow-2xs transition-all cursor-pointer text-left space-y-4 flex flex-col justify-between"
                 >
                   {/* Header: Title & ellipsis menu */}
                   <div className="flex items-start justify-between gap-4">
                     <h4 className="text-sm font-extrabold text-zinc-900 line-clamp-2 leading-tight">
                       {p.name}
                     </h4>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toast.info(`Options for ${p.name}`);
-                      }}
-                      className="p-1 text-zinc-400 hover:text-zinc-600 rounded cursor-pointer shrink-0"
-                    >
-                      <MoreVertical size={16} />
-                    </button>
+                    <div className="relative shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuProjectId(activeMenuProjectId === p.id ? null : p.id);
+                        }}
+                        className="p-1 text-zinc-400 hover:text-zinc-600 rounded cursor-pointer transition-colors"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+
+                      {activeMenuProjectId === p.id && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10 cursor-default"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuProjectId(null);
+                            }}
+                          />
+                          <div
+                            className="absolute right-0 mt-1 w-48 rounded-xl border border-zinc-200 bg-white py-1.5 shadow-lg z-20 text-left animate-in fade-in slide-in-from-top-1 duration-100"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => {
+                                setActiveMenuProjectId(null);
+                                router.push(`/dashboard/user/projects/${p.id}`);
+                              }}
+                              className="w-full px-4 py-2.5 hover:bg-zinc-50 text-xs font-bold text-zinc-700 flex items-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <Clapperboard size={14} className="text-zinc-400" />
+                              Open Video Studio
+                            </button>
+                            {p.videoUrl && (
+                              <button
+                                onClick={() => {
+                                  setActiveMenuProjectId(null);
+                                  setSelectedProjectForEditor({ id: p.id, videoUrl: p.videoUrl });
+                                }}
+                                className="w-full px-4 py-2.5 hover:bg-zinc-50 text-xs font-bold text-zinc-700 flex items-center gap-2 transition-colors cursor-pointer border-t border-zinc-100"
+                              >
+                                <UserCheck size={14} className="text-brand-green" />
+                                Send to Editor
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setActiveMenuProjectId(null);
+                                router.push(`/dashboard/user/projects/${p.id}/publish`);
+                              }}
+                              className="w-full px-4 py-2.5 hover:bg-zinc-50 text-xs font-bold text-zinc-700 flex items-center gap-2 transition-colors cursor-pointer border-t border-zinc-100"
+                            >
+                              <Share2 size={14} className="text-zinc-400" />
+                              Publish Video
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Priority & Status Badges */}
@@ -310,6 +369,13 @@ export default function UserProjectsPage() {
           )}
         </div>
       </main>
+      <SendToEditorModal
+        projectId={selectedProjectForEditor?.id ?? ""}
+        isOpen={selectedProjectForEditor !== null}
+        onClose={() => setSelectedProjectForEditor(null)}
+        sourceVideoUrl={selectedProjectForEditor?.videoUrl}
+        onApproved={loadProjects}
+      />
     </>
   );
 }

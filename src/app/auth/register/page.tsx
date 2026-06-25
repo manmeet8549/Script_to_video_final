@@ -93,11 +93,8 @@ export default function RegisterPage() {
         <div className="absolute -right-24 -bottom-24 w-[600px] h-[600px] rounded-full border border-white/5 pointer-events-none" />
 
         {/* Top: Logo */}
-        <div className="flex items-center gap-2 relative z-10">
-          <div className="w-10 h-10 rounded-xl bg-white text-brand-green flex items-center justify-center shadow-md shadow-black/10">
-            <Play size={20} fill="currentColor" className="translate-x-[0.5px]" />
-          </div>
-          <span className="font-extrabold text-xl tracking-tight">UChat Video</span>
+        <div className="flex items-center gap-2 relative z-10 select-none">
+          <img src="/ThinkNEXT-LOGO-NEW.svg" alt="ThinkNEXT Logo" className="h-16 w-auto" />
         </div>
 
         {/* Center: Content Checklist */}
@@ -123,7 +120,7 @@ export default function RegisterPage() {
 
         {/* Bottom: Copyright */}
         <div className="text-xs font-semibold opacity-50 relative z-10">
-          &copy; 2024 UChat Video AI.
+          &copy; 2024 ThinkNEXT Video AI.
         </div>
       </div>
 

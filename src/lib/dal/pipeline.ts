@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/dal/auth";
 import { setStageStatus } from "@/lib/dal/projects";
 import { resolveCredential } from "@/lib/dal/integrations";
-import { uploadMedia } from "@/lib/storage/media";
+import { uploadMedia, toPublicUrl } from "@/lib/storage/media";
 import { fetchAndStoreVideo } from "@/lib/storage/video-backfill";
 import { recordCreditUsage, addStorageUsage } from "@/lib/dal/credits";
 import {
@@ -409,14 +409,28 @@ export async function createEditTask(
     editType: "ai" | "manual";
     instructions?: string;
     editorId?: string | null;
-    sourceVideoUrl?: string;
+    sourceVideoUrl?: string | null;
     settings?: Record<string, unknown>;
   },
 ): Promise<EditingTask> {
   const supabase = await createClient();
   const user = await getUser();
 
-  const sourceUrl = input.sourceVideoUrl ?? (await getLatestVideo(projectId))?.video_url ?? null;
+  // Resolve the source video URL. Priority:
+  //   1. Caller-supplied URL
+  //   2. Latest video_generation row (pipeline-generated videos)
+  //   3. projects.video_url (user-uploaded videos, which have no video_generation row)
+  const videoGenUrl = (await getLatestVideo(projectId))?.video_url ?? null;
+  let projectVideoUrl: string | null = null;
+  if (!input.sourceVideoUrl && !videoGenUrl) {
+    const { data: proj } = await supabase
+      .from("projects")
+      .select("video_url")
+      .eq("id", projectId)
+      .single();
+    projectVideoUrl = proj?.video_url ?? null;
+  }
+  const sourceUrl = input.sourceVideoUrl ?? videoGenUrl ?? projectVideoUrl;
 
   const { data: task, error } = await supabase
     .from("editing_tasks")
@@ -452,8 +466,9 @@ export async function createEditTask(
   }
 
   const provider = getEditProvider(resolved.api.provider_key);
+  const publicSourceUrl = toPublicUrl(sourceUrl);
   const result = await provider.submitEdit(resolved.credential, {
-    sourceVideoUrl: sourceUrl,
+    sourceVideoUrl: publicSourceUrl || sourceUrl,
     instructions: input.instructions,
     settings: input.settings,
   });
@@ -499,7 +514,12 @@ export async function createPublishTask(
   const supabase = await createClient();
   const user = await getUser();
 
-  const videoUrl = input.videoUrl ?? (await getLatestVideo(projectId))?.video_url ?? null;
+  // Resolve a public URL: prefer the caller-supplied value, fall back to the
+  // latest video generation row. Either may be a proxy path
+  // (/api/media/stream?key=…) — convert to a public R2 URL so external
+  // providers (Zernio, etc.) can actually reach the file.
+  const rawVideoUrl = input.videoUrl ?? (await getLatestVideo(projectId))?.video_url ?? null;
+  const videoUrl = toPublicUrl(rawVideoUrl) ?? rawVideoUrl;
 
   const { data: task, error } = await supabase
     .from("publishing_tasks")
@@ -604,6 +624,12 @@ export async function createPublishTask(
       projectId,
       reason: `Publish to ${input.platform}`,
     });
+    try {
+      const { notifyAdminsOnPublish } = require("@/lib/dal/notifications");
+      await notifyAdminsOnPublish(workspaceId, projectId);
+    } catch (err) {
+      console.error("Failed to notify admins of publish completion:", err);
+    }
   }
   return updated ?? task;
 }
@@ -676,6 +702,110 @@ export async function publishApprovedTask(
       projectId: task.project_id,
       reason: `Publish to ${task.platform}`,
     });
+    try {
+      const { notifyAdminsOnPublish } = require("@/lib/dal/notifications");
+      await notifyAdminsOnPublish(workspaceId, task.project_id);
+    } catch (err) {
+      console.error("Failed to notify admins of approved publish:", err);
+    }
   }
   return updated ?? task;
+}
+
+export async function getLatestEditTask(projectId: string): Promise<EditingTask | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("editing_tasks")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  return (data?.[0] as EditingTask | undefined) ?? null;
+}
+
+export async function pollEditing(workspaceId: string, editTaskId: string): Promise<EditingTask> {
+  const supabase = await createClient();
+  const { data: row } = await supabase
+    .from("editing_tasks")
+    .select("*")
+    .eq("id", editTaskId)
+    .single();
+  if (!row) throw new Error("Editing task not found");
+  if (row.status !== "in_progress" || !row.provider_job_id || !row.edit_provider) return row as EditingTask;
+
+  const resolved = await resolveCredential(workspaceId, "editing", row.edit_provider);
+  if (!resolved) return row as EditingTask;
+  const provider = getEditProvider(resolved.api.provider_key);
+  if (!provider?.getStatus) return row as EditingTask;
+
+  const result = await provider.getStatus(resolved.credential, row.provider_job_id);
+  if (result.status === "generating") return row as EditingTask;
+
+  let finalVideoUrl = result.resultUrl ?? null;
+  if (result.status === "completed" && result.resultUrl) {
+    try {
+      const customKey = `videos/${workspaceId}/${row.project_id}-edited-${row.id}.mp4`;
+      const stored = await fetchAndStoreVideo(workspaceId, row.project_id, result.resultUrl, null, customKey);
+      if (stored?.videoUrl) {
+        finalVideoUrl = stored.videoUrl;
+      }
+    } catch (err) {
+      console.error("Failed to backfill edited video to R2:", err);
+    }
+  }
+
+  if (result.status === "completed" && finalVideoUrl) {
+    try {
+      await supabase
+        .from("projects")
+        .update({ video_url: finalVideoUrl })
+        .eq("id", row.project_id);
+      await setStageStatus(row.project_id, "editing", "completed", {
+        edited_video_url: finalVideoUrl,
+      });
+    } catch (err) {
+      console.error("Failed to update project active video url:", err);
+    }
+  }
+
+  const patch =
+    result.status === "completed"
+      ? {
+          status: "completed" as const,
+          edited_video_url: finalVideoUrl,
+          completed_at: new Date().toISOString(),
+        }
+      : result.status === "failed"
+        ? { status: "rejected" as const, feedback: result.error ?? "Edit failed" }
+        : { status: "in_progress" as const };
+
+  const { data: updated } = await supabase
+    .from("editing_tasks")
+    .update(patch)
+    .eq("id", row.id)
+    .select("*")
+    .single();
+
+  if (result.status === "completed" && row.requested_by) {
+    try {
+      const { createNotification } = require("@/lib/dal/notifications");
+      const { getProject } = require("@/lib/dal/projects");
+      const project = await getProject(row.project_id);
+      const title = project?.title || "your project";
+      await createNotification({
+        userId: row.requested_by,
+        workspaceId,
+        type: "edit_complete",
+        title: "AI Edit Completed",
+        message: `Submagic AI edit is complete for project "${title}".`,
+        relatedProjectId: row.project_id,
+        relatedTaskId: row.id,
+        actionUrl: `/dashboard/user/edit/ai`,
+      });
+    } catch (err) {
+      console.error("Failed to notify user of completed AI edit:", err);
+    }
+  }
+
+  return (updated ?? row) as EditingTask;
 }

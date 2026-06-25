@@ -88,12 +88,9 @@ function AcceptInviteFlow() {
       {stage !== "welcome" && (
         <div className="flex flex-col items-center gap-1 mb-8 select-none">
           <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-brand-green text-white flex items-center justify-center">
-              <Play size={14} fill="currentColor" className="translate-x-[0.5px]" />
-            </span>
-            <span className="font-extrabold text-2xl tracking-tight text-zinc-900">UChat</span>
+            <img src="/ThinkNEXT-LOGO-NEW.svg" alt="ThinkNEXT Logo" className="h-12 w-auto" />
           </div>
-          <span className="text-[11px] font-bold text-zinc-400 tracking-[0.2em] uppercase">Video Platform</span>
+          <span className="text-[10px] font-bold text-zinc-450 tracking-[0.2em] uppercase mt-0.5">Video Platform</span>
         </div>
       )}
 
@@ -158,7 +155,7 @@ function Landing({
       </span>
       <h1 className="text-3xl font-extrabold text-zinc-900 mt-4">You&apos;re Invited!</h1>
       <p className="text-sm font-medium text-zinc-500 mt-2 leading-relaxed">
-        {inviterName} has invited you to be the {roleLabel} of this workspace on UChat Video.
+        {inviterName} has invited you to be the {roleLabel} of this workspace on ThinkNEXT Video.
       </p>
 
       <div className="bg-zinc-50 rounded-xl p-4 my-6 space-y-3">
@@ -284,7 +281,7 @@ function PasswordStep({
       </h1>
       <p className="text-sm font-medium text-zinc-500 mt-1.5 mb-6">
         {hasSession
-          ? "Set a secure password for your UChat account."
+          ? "Set a secure password for your ThinkNEXT account."
           : "Enter the temporary password from your email, then create a secure one."}
       </p>
 
@@ -571,7 +568,7 @@ function Welcome({
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-brand-green to-brand-green-hover flex flex-col items-center justify-center px-6 py-12 text-white text-center overflow-y-auto">
       <div className="max-w-3xl w-full">
-        <h1 className="text-4xl font-extrabold tracking-tight">Welcome to UChat, {name}!</h1>
+        <h1 className="text-4xl font-extrabold tracking-tight">Welcome to ThinkNEXT, {name}!</h1>
         <p className="text-lg font-medium text-white/90 mt-3">
           You&apos;re now part of {workspaceName} as {roleLabel}.
         </p>

@@ -180,6 +180,12 @@ export async function completePublishByJob(
   if (status === "completed") {
     await markStage(row.project_id, "publish", "completed");
     await admin.from("projects").update({ status: "published" }).eq("id", row.project_id);
+    try {
+      const { notifyAdminsOnPublish } = require("@/lib/dal/notifications");
+      await notifyAdminsOnPublish(null, row.project_id);
+    } catch (err) {
+      console.error("Failed to notify admins of webhook publish:", err);
+    }
   }
   return true;
 }

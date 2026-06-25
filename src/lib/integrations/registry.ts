@@ -6,6 +6,7 @@ import { elevenLabs } from "@/lib/integrations/elevenlabs";
 import { heygen } from "@/lib/integrations/heygen";
 import { submagic } from "@/lib/integrations/submagic";
 import { genericEdit, genericPublish } from "@/lib/integrations/generic";
+import { zernio } from "@/lib/integrations/zernio";
 import type {
   EditProvider,
   PublishProvider,
@@ -34,6 +35,7 @@ const editProviders: Record<string, EditProvider> = {
 };
 
 const publishProviders: Record<string, PublishProvider> = {
+  zernio,
   "generic-publish": genericPublish,
 };
 

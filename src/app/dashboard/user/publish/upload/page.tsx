@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { UploadCloud, CheckCircle, Video, Loader2, ArrowLeft } from "lucide-react";
+import { UploadCloud, CheckCircle, Video, Loader2, ArrowLeft, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { api } from "@/lib/api/client";
 
 export default function UserPublishUploadPage() {
   const router = useRouter();
@@ -27,7 +28,7 @@ export default function UserPublishUploadPage() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith("video/")) {
@@ -47,25 +48,74 @@ export default function UserPublishUploadPage() {
     }
   };
 
-  const handleStartPublish = () => {
+  const handleStartPublish = async () => {
     if (!selectedFile) return;
     setIsUploading(true);
     setUploadProgress(0);
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          toast.success("Video upload complete! Processing metadata...");
-          setTimeout(() => {
-            router.push("/dashboard/user/publish");
-          }, 1000);
-          return 100;
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(percentComplete);
         }
-        return prev + 25;
       });
-    }, 400);
+
+      xhr.addEventListener("load", async () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            // jsonOk() wraps the payload in { data: ... }, so the URL lives at
+            // response.data.url — not response.url.
+            const raw = JSON.parse(xhr.responseText);
+            const videoUrl: string = raw?.data?.url ?? raw?.url;
+            if (!videoUrl) throw new Error("Upload succeeded but no URL was returned.");
+
+            toast.success("Video upload complete! Preparing publication...");
+
+            const newProj = await api.post<any>("/api/projects", {
+              title: selectedFile.name.replace(/\.[^/.]+$/, ""),
+              description: `Uploaded video: ${selectedFile.name}`,
+              status: "editing",
+            });
+
+            await api.patch(`/api/projects/${newProj.id}`, {
+              video_url: videoUrl,
+              progress_percent: 80,
+            });
+
+            toast.success("Publication record initialized.");
+
+            setTimeout(() => {
+              router.push(`/dashboard/user/projects/${newProj.id}/publish`);
+            }, 1000);
+          } catch (err) {
+            console.error("Failed to initialize project record:", err);
+            toast.error("Failed to initialize project record for uploaded video.");
+            setIsUploading(false);
+          }
+        } else {
+          toast.error("Failed to upload video to storage.");
+          setIsUploading(false);
+        }
+      });
+
+      xhr.addEventListener("error", () => {
+        toast.error("Network error during file upload.");
+        setIsUploading(false);
+      });
+
+      xhr.open("POST", "/api/media/upload");
+      xhr.send(formData);
+    } catch (err) {
+      console.error("Upload initialization failed:", err);
+      toast.error("Upload initialization failed.");
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -88,8 +138,18 @@ export default function UserPublishUploadPage() {
           </p>
         </div>
 
+        {/* Supported formats info bar */}
+        <div className="flex items-center gap-2 text-[10px] font-semibold text-zinc-400 bg-white border border-zinc-200 rounded-xl px-4 py-2.5 select-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-green shrink-0" />
+          Supported formats: MP4, MOV, WEBM — up to 1GB
+          <span className="mx-2 text-zinc-200">|</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+          Minimum resolution: 720p recommended for best quality
+        </div>
+
         {/* Upload Container */}
         <div className="bg-white border border-zinc-200 rounded-2xl p-8 shadow-sm space-y-6">
+          {/* Drag & Drop zone */}
           {!isUploading && !selectedFile && (
             <div
               onDragEnter={handleDrag}
@@ -97,20 +157,28 @@ export default function UserPublishUploadPage() {
               onDragLeave={handleDrag}
               onDrop={handleDrop}
               className={`border-2 border-dashed rounded-2xl p-12 text-center flex flex-col items-center justify-center space-y-4 transition-all ${
-                dragActive ? "border-blue-500 bg-blue-50/20" : "border-zinc-200 bg-zinc-50/30 hover:bg-zinc-50"
+                dragActive
+                  ? "border-brand-green bg-brand-green-light/20"
+                  : "border-zinc-200 bg-zinc-50/30 hover:bg-zinc-50 hover:border-zinc-300"
               }`}
             >
-              <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-650 flex items-center justify-center border border-blue-100">
+              <div
+                className={`w-14 h-14 rounded-full flex items-center justify-center border transition-colors ${
+                  dragActive
+                    ? "bg-brand-green-light border-brand-green text-brand-green"
+                    : "bg-zinc-100 border-zinc-200 text-zinc-400"
+                }`}
+              >
                 <UploadCloud size={24} />
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-bold text-zinc-800">Drag & drop video files here</h3>
+                <h3 className="text-sm font-bold text-zinc-800">Drag & drop your video here</h3>
                 <p className="text-xs font-semibold text-zinc-400">
-                  MP4, MOV, or WEBM up to 1GB.
+                  or browse for a file from your device
                 </p>
               </div>
               <div className="relative">
-                <label className="h-9 px-4 bg-zinc-850 hover:bg-zinc-950 text-white rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center select-none active:scale-[0.98]">
+                <label className="h-9 px-5 bg-brand-green hover:bg-brand-green-hover text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center select-none active:scale-[0.98] shadow-sm shadow-brand-green/15">
                   Browse Files
                   <input
                     type="file"
@@ -123,9 +191,10 @@ export default function UserPublishUploadPage() {
             </div>
           )}
 
+          {/* File selected state */}
           {selectedFile && !isUploading && (
-            <div className="border border-zinc-200 rounded-2xl p-6 flex flex-col justify-between items-center text-center space-y-5 bg-zinc-50/50">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center">
+            <div className="border border-brand-green/30 rounded-2xl p-6 flex flex-col justify-between items-center text-center space-y-5 bg-brand-green-light/10">
+              <div className="w-12 h-12 rounded-xl bg-brand-green-light border border-brand-green/20 text-brand-green flex items-center justify-center">
                 <Video size={20} />
               </div>
               <div>
@@ -137,36 +206,88 @@ export default function UserPublishUploadPage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setSelectedFile(null)}
-                  className="h-9 px-4 border border-zinc-200 hover:bg-zinc-100 text-zinc-700 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                  className="h-9 px-4 border border-zinc-200 hover:bg-zinc-100 text-zinc-700 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
                 >
-                  Remove File
+                  <X size={13} />
+                  Remove
                 </button>
                 <button
                   onClick={handleStartPublish}
-                  className="h-9 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-sm active:scale-95"
+                  className="h-9 px-5 bg-brand-green hover:bg-brand-green-hover text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm shadow-brand-green/20 active:scale-[0.98] flex items-center gap-1.5"
                 >
+                  <UploadCloud size={14} />
                   Start Uploading
                 </button>
               </div>
             </div>
           )}
 
+          {/* Upload progress state */}
           {isUploading && (
             <div className="border border-zinc-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center space-y-6 bg-zinc-50/30">
-              <Loader2 size={36} className="animate-spin text-blue-600" />
-              <div className="space-y-2 w-full max-w-xs">
-                <h4 className="text-sm font-bold text-zinc-800">Uploading Video File...</h4>
-                <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-600 transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-                <span className="text-[10px] font-bold text-zinc-400 block">{uploadProgress}% complete</span>
-              </div>
+              {uploadProgress < 100 ? (
+                <>
+                  <div className="relative w-14 h-14">
+                    <div className="absolute inset-0 rounded-full border-4 border-brand-green/20" />
+                    <div
+                      className="absolute inset-0 rounded-full border-4 border-brand-green border-t-transparent animate-spin"
+                      style={{ animationDuration: "0.8s" }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-[10px] font-extrabold text-brand-green">{uploadProgress}%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2 w-full max-w-xs">
+                    <h4 className="text-sm font-bold text-zinc-800">Uploading Video...</h4>
+                    <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-brand-green transition-all duration-300 rounded-full"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-zinc-400 block">
+                      {uploadProgress}% complete — please keep this tab open
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 rounded-full bg-brand-green-light border border-brand-green/20 flex items-center justify-center">
+                    <CheckCircle size={28} className="text-brand-green" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-zinc-800">Upload Complete!</h4>
+                    <p className="text-xs font-semibold text-zinc-400">
+                      Preparing your project for publishing...
+                    </p>
+                  </div>
+                  <Loader2 size={18} className="animate-spin text-brand-green" />
+                </>
+              )}
             </div>
           )}
         </div>
+
+        {/* Tips */}
+        {!isUploading && (
+          <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-3">
+            <h4 className="text-xs font-extrabold text-zinc-700 uppercase tracking-wide">
+              Upload Tips
+            </h4>
+            <ul className="space-y-2">
+              {[
+                "Use MP4 with H.264 encoding for best platform compatibility.",
+                "Ensure your video includes captions for better accessibility.",
+                "Keep titles under 100 characters to fit all platform character limits.",
+              ].map((tip, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs font-semibold text-zinc-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-green shrink-0 mt-1.5" />
+                  {tip}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </main>
   );

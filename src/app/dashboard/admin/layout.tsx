@@ -12,7 +12,6 @@ import {
   CalendarDays,
   Settings,
   Bell,
-  HelpCircle,
   Shield,
   CheckSquare,
   Coins,
@@ -55,6 +54,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     };
 
     fetchCounts();
+  }, []);
+
+  useEffect(() => {
+    if (pathname?.endsWith("/notifications")) {
+      const fetchNotifications = async () => {
+        try {
+          type Notification = { is_read: boolean };
+          const notifs = await api.get<Notification[]>("/api/notifications");
+          setUnreadCount(notifs.filter((n) => !n.is_read).length);
+        } catch {
+          // Fail silently
+        }
+      };
+      fetchNotifications();
+    }
   }, [pathname]);
 
   const navItems = [
@@ -79,13 +93,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="w-64 h-screen sticky top-0 bg-sidebar-bg flex flex-col justify-between p-6 shrink-0 select-none text-zinc-650 border-r border-sidebar-border">
         <div className="space-y-8">
           {/* Logo / Workspace name */}
-          <div className="flex flex-col px-1 select-none text-left">
-            <span className="font-extrabold text-lg tracking-tight text-sidebar-active-text block leading-none">
-              Admin Console
-            </span>
-            <span className="text-[10px] font-bold text-zinc-450 block mt-1 uppercase tracking-wider">
-              {workspaceName ?? "Loading..."}
-            </span>
+          <div className="flex items-center gap-2.5 px-1 select-none text-left">
+            <img src="/ThinkNEXT-LOGO-NEW.svg" alt="ThinkNEXT Logo" className="h-10 w-auto" />
+            <div className="flex flex-col">
+              <span className="font-extrabold text-sm tracking-tight text-sidebar-active-text block leading-none">
+                Admin Console
+              </span>
+              <span className="text-[8px] font-bold text-zinc-450 block mt-0.5 uppercase tracking-wider leading-none">
+                {workspaceName ?? "Loading..."}
+              </span>
+            </div>
           </div>
 
           {/* Navigation links */}
@@ -144,31 +161,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Settings size={16} />
               Workspace Settings
             </Link>
-            <Link
-              href="/dashboard/admin/notifications"
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                pathname === "/dashboard/admin/notifications"
-                  ? "bg-sidebar-active-bg text-sidebar-active-text font-bold"
-                  : "text-zinc-655 hover:text-zinc-955 hover:bg-[#ebeeeb]/40"
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <Bell size={16} />
-                Notifications
-              </span>
-              {unreadCount !== null && unreadCount > 0 && (
-                <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
-                  {unreadCount}
-                </span>
-              )}
-            </Link>
-            <button
-              onClick={() => toast.info("Opening Help & Support panel...")}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-zinc-655 hover:text-zinc-955 text-left cursor-pointer hover:bg-[#ebeeeb]/40"
-            >
-              <HelpCircle size={16} />
-              Help & Support
-            </button>
           </nav>
 
           {/* User Profile Card */}
@@ -192,7 +184,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               <Bell size={18} />
               {unreadCount !== null && unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-extrabold text-white ring-2 ring-white">
+                  {unreadCount}
+                </span>
               )}
             </Link>
             <TopbarUserMenu fallbackInitials="JD" />

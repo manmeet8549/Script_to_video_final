@@ -15,6 +15,7 @@ export type ProjectCardView = {
   progress: number;
   created: string;
   lastUpdated: string;
+  videoUrl?: string | null;
 };
 
 const PRIORITY_LABEL: Record<Project["priority"], "High" | "Medium" | "Low"> = {
@@ -92,5 +93,6 @@ export function mapProjectToCard(p: Project): ProjectCardView {
       year: "numeric",
     }),
     lastUpdated: relativeTime(p.updated_at),
+    videoUrl: p.video_url,
   };
 }

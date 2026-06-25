@@ -85,9 +85,25 @@ export async function resolveCredential(
   const api = data?.[0];
   if (!api) return null;
 
+  let apiKey: string;
+  let apiSecret: string | null = null;
+  try {
+    apiKey = decryptSecret(api.api_key_encrypted);
+    apiSecret = api.api_secret_encrypted ? decryptSecret(api.api_secret_encrypted) : null;
+  } catch (err) {
+    // Decryption fails when ENCRYPTION_KEY doesn't match the key used to
+    // encrypt the stored credential (e.g. after a key rotation or misconfigured
+    // env var). Treat as "no credential" rather than throwing so callers can
+    // surface a clear "not configured" state instead of a 500.
+    console.error(
+      `[resolveCredential] decryption failed for workspace=${workspaceId} provider=${provider}:`,
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
   const credential: ProviderCredential = {
-    apiKey: decryptSecret(api.api_key_encrypted),
-    apiSecret: api.api_secret_encrypted ? decryptSecret(api.api_secret_encrypted) : null,
+    apiKey,
+    apiSecret,
     endpointUrl: api.endpoint_url,
     config: api.config,
   };

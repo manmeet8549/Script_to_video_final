@@ -18,12 +18,7 @@ export default function MarketingLayout({
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group select-none">
-            <div className="w-8 h-8 rounded-lg bg-brand-green flex items-center justify-center text-white shadow-sm shadow-emerald-700/20 group-hover:scale-105 transition-transform">
-              <Play size={16} fill="currentColor" className="translate-x-[0.5px]" />
-            </div>
-            <span className="font-extrabold text-lg tracking-tight text-zinc-900">
-              UChat Video
-            </span>
+            <img src="/ThinkNEXT-LOGO-NEW.svg" alt="ThinkNEXT Logo" className="h-12 w-auto group-hover:scale-105 transition-transform" />
           </Link>
 
           {/* Desktop Navigation */}
@@ -145,9 +140,8 @@ export default function MarketingLayout({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-8 mb-12">
             {/* Brand column */}
             <div className="lg:col-span-2 space-y-4">
-              <div className="flex items-center gap-2 text-white">
-                <Play size={18} fill="currentColor" className="text-brand-green" />
-                <span className="font-extrabold text-lg tracking-tight">UChat Video</span>
+              <div className="flex items-center gap-2 text-white select-none">
+                <img src="/ThinkNEXT-LOGO-NEW.svg" alt="ThinkNEXT Logo" className="h-12 w-auto" />
               </div>
               <p className="text-sm max-w-sm text-zinc-500 font-medium">
                 AI-powered video creation for modern teams.
@@ -223,7 +217,7 @@ export default function MarketingLayout({
 
           {/* Copyright banner */}
           <div className="pt-8 border-t border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-medium text-zinc-600">
-            <span>&copy; 2024 UChat Video AI. All rights reserved.</span>
+            <span>&copy; 2024 ThinkNEXT Video AI. All rights reserved.</span>
           </div>
         </div>
       </footer>

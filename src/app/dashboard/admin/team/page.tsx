@@ -14,6 +14,8 @@ import {
   User,
   UserCheck,
   X,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
@@ -53,10 +55,13 @@ function fmtJoined(iso: string) {
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<"all" | "users" | "editors">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showPasswordId, setShowPasswordId] = useState<string | null>(null);
   const [selectedRoleFilter, setSelectedRoleFilter] = useState("All");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedMemberForProfile, setSelectedMemberForProfile] = useState<MemberRow | null>(null);
+  const [showModalPassword, setShowModalPassword] = useState(false);
 
   // Invite modal
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -499,6 +504,21 @@ export default function AdminTeamPage() {
                     <span className="text-[11px] font-semibold text-zinc-400 block">
                       {member.profile?.email ?? "—"}
                     </span>
+                    {member.profile?.password_plain && (
+                      <div className="mt-2 p-2 bg-zinc-50 border border-zinc-200 rounded-lg flex items-center justify-between text-xs">
+                        <span className="font-semibold text-zinc-500">Pw:</span>
+                        <code className="font-mono text-zinc-800">
+                          {showPasswordId === member.id ? member.profile.password_plain : "••••••••"}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswordId(showPasswordId === member.id ? null : member.id)}
+                          className="text-zinc-400 hover:text-zinc-600 ml-2 cursor-pointer"
+                        >
+                          {showPasswordId === member.id ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    )}
                     <span
                       className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide mt-1.5 ${
                         member.role === "admin" || member.role === "owner"
@@ -532,7 +552,7 @@ export default function AdminTeamPage() {
 
                   <div className="pt-2">
                     <button
-                      onClick={() => toast.info(`Viewing profile for ${member.profile?.full_name ?? member.profile?.email}`)}
+                      onClick={() => setSelectedMemberForProfile(member)}
                       className="w-full h-9 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold rounded-xl transition-all cursor-pointer select-none active:scale-[0.99] flex items-center justify-center"
                     >
                       View Profile
@@ -569,6 +589,21 @@ export default function AdminTeamPage() {
                           <span className="text-[10px] text-zinc-450 block mt-0.5">
                             {member.profile?.email ?? "—"}
                           </span>
+                          {member.profile?.password_plain && (
+                            <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                              <span className="text-zinc-400 font-bold">PW:</span>
+                              <code className="font-mono text-zinc-700 bg-zinc-100 px-1 rounded">
+                                {showPasswordId === member.id ? member.profile.password_plain : "••••••••"}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => setShowPasswordId(showPasswordId === member.id ? null : member.id)}
+                                className="text-zinc-400 hover:text-zinc-650 cursor-pointer"
+                              >
+                                {showPasswordId === member.id ? <EyeOff size={10} /> : <Eye size={10} />}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="p-4 capitalize">
@@ -597,10 +632,8 @@ export default function AdminTeamPage() {
                       <td className="p-4">{fmtJoined(member.created_at)}</td>
                       <td className="p-4 text-right">
                         <button
-                          onClick={() =>
-                            toast.info(`Viewing profile for ${member.profile?.full_name ?? member.profile?.email}`)
-                          }
-                          className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold rounded-lg"
+                          onClick={() => setSelectedMemberForProfile(member)}
+                          className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold rounded-lg cursor-pointer"
                         >
                           View
                         </button>
@@ -619,6 +652,118 @@ export default function AdminTeamPage() {
           )}
         </div>
       </main>
+
+      {/* View Profile Modal */}
+      {selectedMemberForProfile && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl w-full max-w-md p-6 relative space-y-6 text-left">
+            <button
+              onClick={() => {
+                setSelectedMemberForProfile(null);
+                setShowModalPassword(false);
+              }}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-4 border-b border-zinc-100 pb-4">
+              <div className="w-14 h-14 rounded-full bg-brand-green flex items-center justify-center font-extrabold text-lg text-white">
+                {avatarLetter(selectedMemberForProfile)}
+              </div>
+              <div>
+                <h3 className="text-lg font-extrabold text-zinc-900">
+                  {selectedMemberForProfile.profile?.full_name ?? "—"}
+                </h3>
+                <span className="text-xs font-semibold text-zinc-450 block">
+                  {selectedMemberForProfile.profile?.email ?? "—"}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Role</span>
+                  <span className="text-xs font-bold block capitalize bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md w-fit">
+                    {selectedMemberForProfile.role}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Status</span>
+                  <span className="text-xs font-bold block capitalize bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md w-fit">
+                    {selectedMemberForProfile.status}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Joined Date</span>
+                <span className="text-xs font-extrabold text-zinc-800 block">
+                  {new Date(selectedMemberForProfile.created_at).toLocaleDateString("en-US", {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+
+              {selectedMemberForProfile.profile?.password_plain ? (
+                <div className="space-y-1.5 pt-2 border-t border-zinc-100">
+                  <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">
+                    Account Password
+                  </label>
+                  <div className="flex items-center justify-between gap-2 bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2.5">
+                    <code className="text-xs font-mono text-zinc-800 select-all font-bold">
+                      {showModalPassword ? selectedMemberForProfile.profile.password_plain : "••••••••"}
+                    </code>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowModalPassword(!showModalPassword)}
+                        className="text-zinc-400 hover:text-zinc-650 cursor-pointer"
+                        title={showModalPassword ? "Hide password" : "Show password"}
+                      >
+                        {showModalPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedMemberForProfile.profile!.password_plain!);
+                          toast.success("Password copied to clipboard!");
+                        }}
+                        className="text-zinc-400 hover:text-brand-green cursor-pointer"
+                        title="Copy password"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5 pt-2 border-t border-zinc-100">
+                  <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">
+                    Account Password
+                  </label>
+                  <p className="text-xs font-semibold text-zinc-400 bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2.5">
+                    No password stored
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                setSelectedMemberForProfile(null);
+                setShowModalPassword(false);
+              }}
+              className="w-full h-10 bg-brand-green hover:bg-brand-green-hover text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              Close Profile
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

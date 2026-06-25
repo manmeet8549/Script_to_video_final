@@ -40,6 +40,7 @@ export type Profile = {
   avatar_url: string | null;
   phone: string | null;
   is_platform_owner: boolean;
+  password_plain?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -209,6 +210,41 @@ export type PublishingTask = {
   updated_at: string;
 }
 
+export type SocialAccount = {
+  id: string;
+  workspace_id: string;
+  user_id: string | null;
+  platform: "youtube" | "tiktok" | "instagram" | "linkedin" | "facebook" | "x";
+  zernio_account_id: string;
+  channel_name: string | null;
+  account_handle: string | null;
+  is_default: boolean;
+  access_token: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PublishedVideo = {
+  id: string;
+  workspace_id: string;
+  project_id: string | null;
+  video_url: string | null;
+  platform: string;
+  social_account_id: string | null;
+  status: string;
+  external_post_id: string | null;
+  watch_url: string | null;
+  title: string | null;
+  description: string | null;
+  tags: string[] | null;
+  scheduled_at: string | null;
+  published_at: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+
 export type CreditWallet = {
   id: string;
   workspace_id: string;
@@ -325,6 +361,16 @@ export type Database = {
         PublishingTask,
         Insertable<PublishingTask, "project_id" | "platform">,
         Partial<PublishingTask>
+      >;
+      social_accounts: TableDef<
+        SocialAccount,
+        Insertable<SocialAccount, "workspace_id" | "platform" | "zernio_account_id">,
+        Partial<SocialAccount>
+      >;
+      published_videos: TableDef<
+        PublishedVideo,
+        Insertable<PublishedVideo, "workspace_id" | "platform">,
+        Partial<PublishedVideo>
       >;
       credit_wallets: TableDef<
         CreditWallet,

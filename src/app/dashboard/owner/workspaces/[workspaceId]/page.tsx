@@ -18,6 +18,9 @@ import {
   AlertCircle,
   Copy,
   CheckCircle2,
+  Eye,
+  EyeOff,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
@@ -65,6 +68,10 @@ export default function OwnerWorkspaceDetailPage() {
   const [detail, setDetail] = useState<WorkspaceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showPasswordId, setShowPasswordId] = useState<string | null>(null);
+  const [selectedMemberForProfile, setSelectedMemberForProfile] = useState<MemberWithProfile | null>(null);
+  const [showModalPassword, setShowModalPassword] = useState(false);
 
   // API integrations states
   const [apis, setApis] = useState<SafeWorkspaceApi[]>([]);
@@ -129,6 +136,44 @@ export default function OwnerWorkspaceDetailPage() {
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to switch workspace.");
       setSwitching(false);
+    }
+  };
+
+  const handleToggleStatus = async () => {
+    if (!detail) return;
+    const currentStatus = detail.workspace.status;
+    const nextStatus = currentStatus === "active" ? "suspended" : "active";
+    if (
+      !confirm(
+        `Are you sure you want to ${
+          nextStatus === "suspended" ? "suspend" : "activate"
+        } workspace "${detail.workspace.name}"?`,
+      )
+    ) {
+      return;
+    }
+    setUpdatingStatus(true);
+    try {
+      const updated = await api.patch<Workspace>(`/api/workspaces/${workspaceId}`, {
+        status: nextStatus,
+      });
+      toast.success(
+        `Workspace "${detail.workspace.name}" has been ${
+          nextStatus === "suspended" ? "suspended" : "activated"
+        }.`,
+      );
+      setDetail({
+        ...detail,
+        workspace: updated,
+      });
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "Failed to update workspace status.",
+      );
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -329,14 +374,33 @@ export default function OwnerWorkspaceDetailPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleSwitch}
-            disabled={switching}
-            className="h-10 px-4 bg-brand-green hover:bg-brand-green-hover disabled:bg-brand-green/60 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-emerald-700/10 shrink-0"
-          >
-            {switching ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />}
-            Switch to this workspace
-          </button>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={handleToggleStatus}
+              disabled={updatingStatus}
+              className={`h-10 px-4 border text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs ${
+                workspace.status === "active"
+                  ? "border-red-200 hover:bg-red-50 text-red-650"
+                  : "border-emerald-200 hover:bg-emerald-50 text-emerald-650"
+              }`}
+            >
+              {updatingStatus ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : workspace.status === "active" ? (
+                "Suspend Workspace"
+              ) : (
+                "Activate Workspace"
+              )}
+            </button>
+            <button
+              onClick={handleSwitch}
+              disabled={switching}
+              className="h-10 px-4 bg-brand-green hover:bg-brand-green-hover disabled:bg-brand-green/60 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-emerald-700/10"
+            >
+              {switching ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />}
+              Switch to this workspace
+            </button>
+          </div>
         </div>
 
         {/* Stat cards */}
@@ -545,11 +609,34 @@ export default function OwnerWorkspaceDetailPage() {
                       {m.profile?.full_name ?? m.profile?.email ?? "Unknown user"}
                     </p>
                     <p className="text-[11px] text-zinc-400 truncate">{m.profile?.email}</p>
+                    {m.profile?.password_plain && (
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                        <span className="text-zinc-400 font-bold">PW:</span>
+                        <code className="font-mono text-zinc-700 bg-zinc-100 px-1 rounded">
+                          {showPasswordId === m.id ? m.profile.password_plain : "••••••••"}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswordId(showPasswordId === m.id ? null : m.id)}
+                          className="text-zinc-400 hover:text-zinc-650 cursor-pointer"
+                        >
+                          {showPasswordId === m.id ? <EyeOff size={10} /> : <Eye size={10} />}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded capitalize">
-                  {m.role}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded capitalize">
+                    {m.role}
+                  </span>
+                  <button
+                    onClick={() => setSelectedMemberForProfile(m)}
+                    className="px-2.5 py-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-[10px] font-bold rounded-lg cursor-pointer transition-all"
+                  >
+                    View
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -765,6 +852,120 @@ export default function OwnerWorkspaceDetailPage() {
           </div>
         </section>
       </div>
+
+      {/* View Profile Modal */}
+      {selectedMemberForProfile && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl w-full max-w-md p-6 relative space-y-6 text-left">
+            <button
+              onClick={() => {
+                setSelectedMemberForProfile(null);
+                setShowModalPassword(false);
+              }}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-4 border-b border-zinc-100 pb-4">
+              <div className="w-14 h-14 rounded-full bg-brand-green flex items-center justify-center font-extrabold text-lg text-white">
+                {(selectedMemberForProfile.profile?.full_name ?? selectedMemberForProfile.profile?.email ?? "?")
+                  .slice(0, 1)
+                  .toUpperCase()}
+              </div>
+              <div>
+                <h3 className="text-lg font-extrabold text-zinc-900">
+                  {selectedMemberForProfile.profile?.full_name ?? "—"}
+                </h3>
+                <span className="text-xs font-semibold text-zinc-455 block">
+                  {selectedMemberForProfile.profile?.email ?? "—"}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Role</span>
+                  <span className="text-xs font-bold block capitalize bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md w-fit">
+                    {selectedMemberForProfile.role}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Status</span>
+                  <span className="text-xs font-bold block capitalize bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md w-fit">
+                    {selectedMemberForProfile.status}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">Joined Date</span>
+                <span className="text-xs font-extrabold text-zinc-800 block">
+                  {new Date(selectedMemberForProfile.created_at).toLocaleDateString("en-US", {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+
+              {selectedMemberForProfile.profile?.password_plain ? (
+                <div className="space-y-1.5 pt-2 border-t border-zinc-100">
+                  <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">
+                    Account Password
+                  </label>
+                  <div className="flex items-center justify-between gap-2 bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2.5">
+                    <code className="text-xs font-mono text-zinc-800 select-all font-bold">
+                      {showModalPassword ? selectedMemberForProfile.profile.password_plain : "••••••••"}
+                    </code>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowModalPassword(!showModalPassword)}
+                        className="text-zinc-400 hover:text-zinc-655 cursor-pointer"
+                        title={showModalPassword ? "Hide password" : "Show password"}
+                      >
+                        {showModalPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedMemberForProfile.profile!.password_plain!);
+                          toast.success("Password copied to clipboard!");
+                        }}
+                        className="text-zinc-400 hover:text-brand-green cursor-pointer"
+                        title="Copy password"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5 pt-2 border-t border-zinc-100">
+                  <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wide">
+                    Account Password
+                  </label>
+                  <p className="text-xs font-semibold text-zinc-400 bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2.5">
+                    No password stored
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                setSelectedMemberForProfile(null);
+                setShowModalPassword(false);
+              }}
+              className="w-full h-10 bg-brand-green hover:bg-brand-green-hover text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              Close Profile
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

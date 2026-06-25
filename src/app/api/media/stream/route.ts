@@ -24,9 +24,15 @@ export async function GET(request: NextRequest) {
       credentials: { accessKeyId, secretAccessKey },
     });
 
+    const range = request.headers.get("range");
+    const getParams: any = { Bucket: bucket, Key: key };
+    if (range) {
+      getParams.Range = range;
+    }
+
     let obj;
     try {
-      obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      obj = await s3.send(new GetObjectCommand(getParams));
     } catch (err) {
       if (err instanceof NoSuchKey) return jsonError("Media not found", 404);
       throw err;
@@ -36,12 +42,23 @@ export async function GET(request: NextRequest) {
 
     const bytes = await (obj.Body as { transformToByteArray(): Promise<Uint8Array> }).transformToByteArray();
 
+    const headers: Record<string, string> = {
+      "Content-Type": obj.ContentType ?? "video/mp4",
+      "Cache-Control": "private, max-age=3600",
+      "Accept-Ranges": "bytes",
+    };
+
+    if (obj.ContentLength != null) {
+      headers["Content-Length"] = String(obj.ContentLength);
+    }
+    if (obj.ContentRange) {
+      headers["Content-Range"] = obj.ContentRange;
+    }
+
     return new NextResponse(Buffer.from(bytes), {
-      headers: {
-        "Content-Type": obj.ContentType ?? "audio/mpeg",
-        "Cache-Control": "private, max-age=3600",
-        ...(obj.ContentLength != null ? { "Content-Length": String(obj.ContentLength) } : {}),
-      },
+      status: range ? 206 : 200,
+      statusText: range ? "Partial Content" : "OK",
+      headers,
     });
   });
 }

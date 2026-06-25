@@ -23,6 +23,28 @@ export default function VideoVersionsManager({
   const [assigning, setAssigning] = useState(false);
   const [reviewBusy, setReviewBusy] = useState<string | null>(null);
   const [revisionNotes, setRevisionNotes] = useState<Record<string, string>>({});
+  const [pollingStates, setPollingStates] = useState<Record<string, boolean>>({});
+
+  const refreshAiStatus = async (taskId: string) => {
+    setPollingStates((prev) => ({ ...prev, [taskId]: true }));
+    try {
+      const updatedTask = await api.get<EditingTask>(`/api/projects/${projectId}/edit?poll=1`);
+      setAssignments((prev) =>
+        prev.map((a) => (a.id === taskId ? updatedTask : a))
+      );
+      if (updatedTask.status === "completed") {
+        toast.success("AI Edit completed!");
+      } else if (updatedTask.status === "rejected") {
+        toast.error(`AI Edit failed: ${updatedTask.feedback || "Unknown error"}`);
+      } else {
+        toast.info("AI Edit is still processing.");
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to refresh AI edit status.");
+    } finally {
+      setPollingStates((prev) => ({ ...prev, [taskId]: false }));
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -131,28 +153,58 @@ export default function VideoVersionsManager({
               <div key={a.id} className="rounded-xl border border-zinc-200 p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-                    Assignment
+                    {a.edit_type === "ai" ? `AI Edit (${a.edit_provider ?? "Submagic"})` : "Assignment"}
                   </span>
                   <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[10px] font-bold text-zinc-600">
                     {a.status}
                   </span>
                 </div>
                 <div className="mt-3 space-y-2">
-                  {(versionsByTask[a.id] ?? []).length === 0 ? (
-                    <p className="text-xs text-zinc-400">No versions uploaded yet.</p>
-                  ) : (
-                    (versionsByTask[a.id] ?? []).map((v) => (
+                  {a.edit_type === "ai" ? (
+                    a.status === "completed" && a.edited_video_url ? (
                       <a
-                        key={v.id}
-                        href={v.video_url ?? "#"}
+                        href={a.edited_video_url}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
                       >
-                        <span>Version {v.version}</span>
+                        <span>AI Edited Video</span>
                         <span className="text-brand-green">View</span>
                       </a>
-                    ))
+                    ) : a.status === "in_progress" ? (
+                      <div className="flex items-center text-xs text-zinc-500 gap-2 py-1">
+                        <Loader2 className="animate-spin text-brand-green" size={13} />
+                        <span>AI editing in progress...</span>
+                        <button
+                          onClick={() => refreshAiStatus(a.id)}
+                          disabled={pollingStates[a.id]}
+                          className="text-[10px] font-bold text-brand-green underline ml-auto hover:text-brand-green-hover disabled:opacity-50 cursor-pointer"
+                        >
+                          {pollingStates[a.id] ? "Checking..." : "Refresh Status"}
+                        </button>
+                      </div>
+                    ) : a.status === "rejected" ? (
+                      <p className="text-xs text-red-500">AI Edit failed: {a.feedback || "Unknown error"}</p>
+                    ) : (
+                      <p className="text-xs text-zinc-400">Status: {a.status}</p>
+                    )
+                  ) : (
+                    (versionsByTask[a.id] ?? []).length === 0 ? (
+                      <p className="text-xs text-zinc-400">No versions uploaded yet.</p>
+                    ) : (
+                      (versionsByTask[a.id] ?? []).map((v) => (
+                        <a
+                          key={v.id}
+                          href={v.video_url ?? "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                          <span>Version {v.version}</span>
+                          <span className="text-brand-green">View</span>
+                        </a>
+                      ))
+                    )
                   )}
                 </div>
 

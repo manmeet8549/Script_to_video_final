@@ -93,7 +93,7 @@ export default function MarketingPage() {
                   <div className="w-3 h-3 rounded-full bg-emerald-400" />
                 </div>
                 <div className="text-[10px] font-bold text-zinc-400 tracking-wide uppercase">
-                  UChat Video Editor Pro
+                  ThinkNEXT Video Editor Pro
                 </div>
                 <Maximize2 size={12} className="text-zinc-300" />
               </div>
@@ -191,7 +191,7 @@ export default function MarketingPage() {
                     </label>
                     <textarea
                       disabled
-                      value="Create a marketing video explaining how UChat Video helps modern teams make professional videos at scale."
+                      value="Create a marketing video explaining how ThinkNEXT Video helps modern teams make professional videos at scale."
                       className="w-full text-[9px] font-semibold p-2 border border-zinc-200 rounded-md bg-zinc-50 resize-none h-14 focus:outline-none"
                     />
                   </div>

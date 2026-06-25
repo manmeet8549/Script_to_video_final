@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "UChat Video AI",
+  title: "ThinkNEXT Video AI",
   description: "AI-powered video generation platform",
 };
 

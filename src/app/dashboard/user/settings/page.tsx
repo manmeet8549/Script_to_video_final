@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { User, Shield, Bell, CreditCard, Share2, Sliders } from "lucide-react";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 
 export default function UserSettingsPage() {
   const [fullName, setFullName] = useState("Sarah J.");
@@ -11,13 +12,45 @@ export default function UserSettingsPage() {
     "Content Creator at Acme Corp. Specializing in promotional videos and social media clips."
   );
 
-  const [currentPassword, setCurrentPassword] = useState("••••••••");
-  const [newPassword, setNewPassword] = useState("••••••••");
-  const [confirmPassword, setConfirmPassword] = useState("••••••••");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPw, setIsChangingPw] = useState(false);
 
-  const handleUpdatePassword = (e: React.FormEvent) => {
+  const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Password updated successfully!");
+    if (!newPassword) {
+      toast.error("Password cannot be empty.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+    setIsChangingPw(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("profiles").update({ password_plain: newPassword }).eq("id", user.id);
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast.success("Password updated successfully!");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update password.");
+    } finally {
+      setIsChangingPw(false);
+    }
   };
 
   const handleSaveChanges = (e: React.FormEvent) => {
@@ -179,9 +212,10 @@ export default function UserSettingsPage() {
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                className="h-10 px-6 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-[0.98] cursor-pointer"
+                disabled={isChangingPw}
+                className="h-10 px-6 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-[0.98] cursor-pointer disabled:opacity-60"
               >
-                Update Password
+                {isChangingPw ? "Updating..." : "Update Password"}
               </button>
             </div>
           </form>

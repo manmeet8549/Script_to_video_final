@@ -1,6 +1,6 @@
 -- ============================================================================
 -- 0001_core_schema.sql
--- UChat-style video generation platform — core vertical slice
+-- ThinkNEXT-style video generation platform — core vertical slice
 -- Tables: workspaces, profiles, workspace_members, workspace_apis, projects,
 --         project_stages, scripts, voice_generations, video_generations,
 --         editing_tasks, publishing_tasks

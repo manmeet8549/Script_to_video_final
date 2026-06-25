@@ -3,18 +3,46 @@
 import { useState } from "react";
 import { User, Shield, Bell, Key } from "lucide-react";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 
 export default function OwnerSettingsPage() {
   const [fullName, setFullName] = useState("John Doe");
   const [phoneNumber, setPhoneNumber] = useState("+1 (555) 987-6543");
   const [sessionTimeout, setSessionTimeout] = useState("30");
 
-  const [currentPassword, setCurrentPassword] = useState("••••••••");
-  const [newPassword, setNewPassword] = useState("••••••••");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [isChangingPw, setIsChangingPw] = useState(false);
 
-  const handleUpdatePassword = (e: React.FormEvent) => {
+  const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Password updated successfully!");
+    if (!newPassword) {
+      toast.error("Password cannot be empty.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
+    }
+    setIsChangingPw(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("profiles").update({ password_plain: newPassword }).eq("id", user.id);
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      toast.success("Password updated successfully!");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update password.");
+    } finally {
+      setIsChangingPw(false);
+    }
   };
 
   const handleSaveChanges = (e: React.FormEvent) => {
@@ -79,7 +107,7 @@ export default function OwnerSettingsPage() {
                 <input
                   type="email"
                   disabled
-                  value="owner@uchat.com"
+                  value="owner@thinknext.com"
                   className="w-full px-4 h-11 border border-zinc-200 bg-zinc-50 text-zinc-400 rounded-xl text-sm font-semibold outline-none cursor-not-allowed"
                 />
               </div>
@@ -157,9 +185,10 @@ export default function OwnerSettingsPage() {
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                className="h-10 px-6 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-[0.98] cursor-pointer"
+                disabled={isChangingPw}
+                className="h-10 px-6 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-[0.98] cursor-pointer disabled:opacity-60"
               >
-                Update Password
+                {isChangingPw ? "Updating..." : "Update Password"}
               </button>
             </div>
           </form>

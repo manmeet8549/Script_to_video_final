@@ -1,4 +1,15 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import EditorAssignments from "@/components/EditorAssignments";
+
+function AssignmentsContent() {
+  const searchParams = useSearchParams();
+  const status = searchParams.get("status") || undefined;
+
+  return <EditorAssignments statusFilter={status} />;
+}
 
 export default function EditorAssignmentsPage() {
   return (
@@ -10,7 +21,9 @@ export default function EditorAssignmentsPage() {
             Accept editing work and upload your edited versions for review.
           </p>
         </div>
-        <EditorAssignments />
+        <Suspense fallback={<div className="text-sm font-semibold text-zinc-400 py-10 text-center">Loading assignments...</div>}>
+          <AssignmentsContent />
+        </Suspense>
       </div>
     </main>
   );

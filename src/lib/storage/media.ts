@@ -42,6 +42,20 @@ export function toProxyUrl(url: string | null | undefined): string | null {
   return url;
 }
 
+export function toPublicUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.includes("/api/media/stream?key=")) {
+    try {
+      const match = url.match(/[?&]key=([^&]+)/);
+      if (match && match[1]) {
+        const key = decodeURIComponent(match[1]);
+        return publicMediaUrl(key);
+      }
+    } catch {}
+  }
+  return url;
+}
+
 export async function uploadMedia(
   key: string,
   bytes: ArrayBuffer | Uint8Array | Buffer,

@@ -17,14 +17,14 @@ export default function OwnerAPIManagementPage() {
     {
       id: "1",
       name: "Acme Production App Key",
-      keyPreview: "uchat_live_8f3d...9a2e",
+      keyPreview: "thinknext_live_8f3d...9a2e",
       status: "active",
       created: "Jun 12, 2026",
     },
     {
       id: "2",
       name: "Staging Testing Endpoint",
-      keyPreview: "uchat_test_7a1b...2c4d",
+      keyPreview: "thinknext_test_7a1b...2c4d",
       status: "active",
       created: "Jun 18, 2026",
     },
@@ -39,7 +39,7 @@ export default function OwnerAPIManagementPage() {
     const newKey: APIKeyItem = {
       id: Date.now().toString(),
       name: newKeyName,
-      keyPreview: `uchat_live_${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
+      keyPreview: `thinknext_live_${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
       status: "active",
       created: "Just now",
     };

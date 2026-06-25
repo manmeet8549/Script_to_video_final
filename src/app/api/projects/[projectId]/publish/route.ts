@@ -10,10 +10,13 @@ const schema = z.object({
   title: z.string().max(200).optional(),
   description: z.string().max(8000).optional(),
   tags: z.array(z.string()).optional(),
-  thumbnail_url: z.string().url().optional(),
+  // Accept any string — the server converts to a public URL via toPublicUrl()
+  // before passing to the provider, so proxy paths (/api/media/stream?key=...)
+  // and R2 keys are all valid inputs here.
+  thumbnail_url: z.string().optional(),
   visibility: z.enum(["public", "unlisted", "private"]).optional(),
-  scheduled_at: z.string().datetime().optional(),
-  video_url: z.string().url().optional(),
+  scheduled_at: z.string().datetime({ offset: true }).optional(),
+  video_url: z.string().optional(),
   settings: z.record(z.string(), z.unknown()).optional(),
 });
 

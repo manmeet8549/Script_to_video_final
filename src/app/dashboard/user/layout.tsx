@@ -10,8 +10,10 @@ import {
   Upload,
   Bell,
   Settings,
-  HelpCircle,
   Sparkles,
+  Users,
+  UserCheck,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarUserCard } from "@/components/sidebar-user-card";
@@ -26,6 +28,15 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
     api.get<Notification[]>("/api/notifications")
       .then((notifs) => setUnreadCount(notifs.filter((n) => !n.is_read).length))
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (pathname?.endsWith("/notifications")) {
+      type Notification = { is_read: boolean };
+      api.get<Notification[]>("/api/notifications")
+        .then((notifs) => setUnreadCount(notifs.filter((n) => !n.is_read).length))
+        .catch(() => {});
+    }
   }, [pathname]);
 
   const navItems = [
@@ -34,6 +45,10 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
     { label: "Script Gen", href: "/dashboard/user/projects", icon: <Sparkles size={16} /> },
     { label: "Voiceover", href: "/dashboard/user/projects", icon: <Clapperboard size={16} /> },
     { label: "Video Studio", href: "/dashboard/user/projects", icon: <Clapperboard size={16} /> },
+    { category: "EDIT MANAGER" },
+    { label: "Edit with AI", href: "/dashboard/user/edit/ai", icon: <Wand2 size={16} /> },
+    { label: "Send to Editor", href: "/dashboard/user/edit/manual", icon: <UserCheck size={16} /> },
+    { label: "Editor Manager", href: "/dashboard/user/editors", icon: <Users size={16} /> },
     { category: "DISTRIBUTION" },
     { label: "Publishing Hub", href: "/dashboard/user/publish", icon: <Share2 size={16} /> },
     { label: "Upload & Publish", href: "/dashboard/user/publish/upload", icon: <Upload size={16} /> },
@@ -45,13 +60,16 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
       <aside className="w-64 h-screen sticky top-0 bg-sidebar-bg flex flex-col justify-between p-6 shrink-0 select-none text-zinc-650 border-r border-sidebar-border">
         <div className="space-y-8">
           {/* Logo / Creator welcome */}
-          <div className="flex flex-col px-1 select-none text-left">
-            <span className="font-extrabold text-lg tracking-tight text-sidebar-active-text block leading-none">
-              Project Workflow
-            </span>
-            <span className="text-[10px] font-bold text-zinc-450 block mt-1 uppercase tracking-wider">
-              V2.4 Active
-            </span>
+          <div className="flex items-center gap-2.5 px-1 select-none text-left">
+            <img src="/ThinkNEXT-LOGO-NEW.svg" alt="ThinkNEXT Logo" className="h-10 w-auto" />
+            <div className="flex flex-col">
+              <span className="font-extrabold text-sm tracking-tight text-sidebar-active-text block leading-none">
+                Project Workflow
+              </span>
+              <span className="text-[8px] font-bold text-zinc-450 block mt-0.5 uppercase tracking-wider leading-none">
+                V2.4 Active
+              </span>
+            </div>
           </div>
 
           {/* Navigation links */}
@@ -91,45 +109,6 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
 
         {/* System Settings & Profile */}
         <div className="space-y-4 pt-4 border-t border-sidebar-border">
-          <nav className="space-y-1">
-            <Link
-              href="/dashboard/user/settings"
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                pathname === "/dashboard/user/settings"
-                  ? "bg-sidebar-active-bg text-sidebar-active-text font-bold"
-                  : "text-zinc-650 hover:text-zinc-950 hover:bg-[#ebeeeb]/40"
-              }`}
-            >
-              <Settings size={16} />
-              Settings
-            </Link>
-            <Link
-              href="/dashboard/user/notifications"
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                pathname === "/dashboard/user/notifications"
-                  ? "bg-sidebar-active-bg text-sidebar-active-text font-bold"
-                  : "text-zinc-650 hover:text-zinc-950 hover:bg-[#ebeeeb]/40"
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <Bell size={16} />
-                Notifications
-              </span>
-              {unreadCount !== null && unreadCount > 0 && (
-                <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
-                  {unreadCount}
-                </span>
-              )}
-            </Link>
-            <button
-              onClick={() => toast.info("Opening Help & Support panel...")}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-zinc-655 hover:text-zinc-950 text-left cursor-pointer hover:bg-[#ebeeeb]/40"
-            >
-              <HelpCircle size={16} />
-              Help & Support
-            </button>
-          </nav>
-
           {/* User Profile Card & Pro Upgrade Button */}
           <div className="space-y-3 pt-2">
             <SidebarUserCard />
@@ -148,33 +127,7 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
       {/* Main Content Pane */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar Navigation */}
-        <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-between shrink-0 select-none z-45">
-          {/* Left links */}
-          <div className="flex items-center gap-6">
-            <Link
-              href="/dashboard/user"
-              className={`text-sm font-semibold transition-colors ${
-                pathname === "/dashboard/user" ? "text-sidebar-active-text font-bold" : "text-zinc-500 hover:text-zinc-900"
-              }`}
-            >
-              Workspace
-            </Link>
-            <Link
-              href="/dashboard/user/projects"
-              className={`text-sm font-semibold transition-colors ${
-                pathname.startsWith("/dashboard/user/projects") ? "text-sidebar-active-text font-bold" : "text-zinc-500 hover:text-zinc-900"
-              }`}
-            >
-              Library
-            </Link>
-            <button
-              onClick={() => toast.info("Opening Templates Gallery...")}
-              className="text-zinc-500 hover:text-zinc-900 text-sm font-semibold transition-colors cursor-pointer"
-            >
-              Templates
-            </button>
-          </div>
-
+        <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-end shrink-0 select-none z-45">
           {/* Right items */}
           <div className="flex items-center gap-4">
             <Link
@@ -190,15 +143,10 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
             >
               <Bell size={18} />
               {unreadCount !== null && unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-extrabold text-white ring-2 ring-white">
+                  {unreadCount}
+                </span>
               )}
-            </Link>
-            <Link
-              href="/dashboard/user/settings"
-              className="p-2 text-zinc-500 hover:text-zinc-900 transition-colors"
-              title="Settings"
-            >
-              <Settings size={18} />
             </Link>
           </div>
         </header>

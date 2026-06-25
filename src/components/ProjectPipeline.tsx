@@ -13,12 +13,15 @@ import {
   Wand2,
   Layers,
   Volume2,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
 import AudioPlayer from "@/components/AudioPlayer";
 import SubmagicEditDrawer from "@/components/SubmagicEditDrawer";
 import VideoVersionsManager from "@/components/VideoVersionsManager";
+import SendToEditorModal from "@/components/SendToEditorModal";
+
 
 type Voice = { id: string; name: string; description?: string; gender?: string };
 type Avatar = { id: string; name: string; preview_image_url: string; preview_video_url?: string; description?: string };
@@ -69,6 +72,8 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [submagicOpen, setSubmagicOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [sendToEditorOpen, setSendToEditorOpen] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -225,7 +230,8 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
     (async () => {
       setLoading(true);
       try {
-        const [scriptRow, voiceRow, videoRow] = await Promise.all([
+        const [projectRow, scriptRow, voiceRow, videoRow] = await Promise.all([
+          api.get<{ video_url?: string | null; status?: string } | null>(`/api/projects/${projectId}`),
           api.get<{ content?: string; word_count?: number } | null>(`/api/projects/${projectId}/script`),
           api.get<{ audio_url?: string; voice_id?: string; status?: string } | null>(`/api/projects/${projectId}/voice`),
           api.get<{ video_url?: string; status?: string } | null>(`/api/projects/${projectId}/video`),
@@ -235,9 +241,11 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
         if (scriptRow?.content) setScript(scriptRow.content);
         if (voiceRow?.audio_url && voiceRow.status === "completed") setAudioUrl(voiceRow.audio_url);
         if (voiceRow?.voice_id) setVoiceId(voiceRow.voice_id);
-        if (videoRow?.video_url && videoRow.status === "completed") setVideoUrl(videoRow.video_url);
+        
+        const activeVideoUrl = projectRow?.video_url || (videoRow?.status === "completed" ? videoRow?.video_url : null);
+        if (activeVideoUrl) setVideoUrl(activeVideoUrl);
 
-        if (videoRow?.video_url && videoRow.status === "completed") setStep(5);
+        if (activeVideoUrl) setStep(5);
         else if (voiceRow?.audio_url && voiceRow.status === "completed") {
           setStep(4);
           if (videoRow?.status === "generating") {
@@ -257,7 +265,7 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
       active = false;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [projectId, pollStatus]);
+  }, [projectId, pollStatus, refreshTrigger]);
 
   const generateVideo = async () => {
     if (!avatarId) return toast.error("Select an avatar first.");
@@ -646,6 +654,9 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
             <button onClick={() => setSubmagicOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer">
               <Wand2 size={14} /> AI Edit with Submagic
             </button>
+            <button onClick={() => setSendToEditorOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer">
+              <UserCheck size={14} /> Send to Editor
+            </button>
             <button onClick={() => setVersionsOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer">
               <Layers size={14} /> Manage Versions
             </button>
@@ -661,6 +672,13 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
 
       <SubmagicEditDrawer projectId={projectId} open={submagicOpen} onClose={() => setSubmagicOpen(false)} />
       <VideoVersionsManager projectId={projectId} open={versionsOpen} onClose={() => setVersionsOpen(false)} />
+      <SendToEditorModal
+        projectId={projectId}
+        isOpen={sendToEditorOpen}
+        onClose={() => setSendToEditorOpen(false)}
+        sourceVideoUrl={videoUrl}
+        onApproved={() => setRefreshTrigger((prev) => prev + 1)}
+      />
     </div>
   );
 }

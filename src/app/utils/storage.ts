@@ -117,7 +117,7 @@ const DEFAULT_PROJECTS: UserProject[] = [
     duration: "2:30",
     language: "English (US)",
     instructions: "Focus on scenic beauty and brand alignment.",
-    generatedScriptText: "Are you ready to transform how your team creates videos? Introducing UChat Video AI. UChat Video is the all-in-one platform built for modern teams to automate video production at scale.",
+    generatedScriptText: "Are you ready to transform how your team creates videos? Introducing ThinkNEXT Video AI. ThinkNEXT Video is the all-in-one platform built for modern teams to automate video production at scale.",
     wordCount: 32,
     estDuration: "0:15",
     selectedVoiceModel: "Marcus",
@@ -127,7 +127,7 @@ const DEFAULT_PROJECTS: UserProject[] = [
     selectedBg: "Studio",
     resolution: "1080p",
     youtubeTitle: "Q3 Nature Promo - Final Cut",
-    youtubeDescription: "Our nature promo explaining the value of UChat Video."
+    youtubeDescription: "Our nature promo explaining the value of ThinkNEXT Video."
   },
   {
     id: "onboarding-v2",
@@ -147,7 +147,7 @@ const DEFAULT_PROJECTS: UserProject[] = [
     selectedTone: "Educational",
     duration: "5:00",
     language: "English (US)",
-    generatedScriptText: "Welcome to UChat Video. In this onboarding tutorial, we will show you how to generate video scripts, select AI voices, and export to social platforms in one click.",
+    generatedScriptText: "Welcome to ThinkNEXT Video. In this onboarding tutorial, we will show you how to generate video scripts, select AI voices, and export to social platforms in one click.",
     wordCount: 30,
     estDuration: "0:20",
     selectedVoiceModel: "Sarah",

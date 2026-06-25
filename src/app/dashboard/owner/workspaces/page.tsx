@@ -40,9 +40,36 @@ export default function OwnerWorkspacesPage() {
     load();
   }, [load]);
 
-  const handleToggleStatus = (_id: string, name: string, _currentStatus: string) => {
-    toast.info(`Status management for "${name}" is available from workspace settings.`);
+  const handleToggleStatus = async (id: string, name: string, currentStatus: string) => {
+    const nextStatus = currentStatus === "active" ? "suspended" : "active";
+    if (
+      !confirm(
+        `Are you sure you want to ${
+          nextStatus === "suspended" ? "suspend" : "activate"
+        } workspace "${name}"?`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.patch(`/api/workspaces/${id}`, { status: nextStatus });
+      toast.success(
+        `Workspace "${name}" has been ${
+          nextStatus === "suspended" ? "suspended" : "activated"
+        }.`,
+      );
+      setWorkspaces((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, status: nextStatus } : w)),
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "Failed to update workspace status.",
+      );
+    }
   };
+
 
   const filteredWorkspaces = workspaces.filter((w) => {
     return (

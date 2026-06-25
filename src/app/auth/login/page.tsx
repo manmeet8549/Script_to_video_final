@@ -55,11 +55,8 @@ export default function LoginPage() {
         <div className="absolute left-[15%] top-[30%] w-[300px] h-[300px] rounded-full border border-white/5 pointer-events-none" />
 
         {/* Top: Logo */}
-        <div className="flex items-center gap-2 relative z-10">
-          <div className="w-10 h-10 rounded-xl bg-white text-brand-green flex items-center justify-center shadow-md shadow-black/10">
-            <Play size={20} fill="currentColor" className="translate-x-[0.5px]" />
-          </div>
-          <span className="font-extrabold text-xl tracking-tight">UChat Video</span>
+        <div className="flex items-center gap-2 relative z-10 select-none">
+          <img src="/ThinkNEXT-LOGO-NEW.svg" alt="ThinkNEXT Logo" className="h-16 w-auto" />
         </div>
 
         {/* Center: Headline */}
@@ -73,7 +70,7 @@ export default function LoginPage() {
         <div className="space-y-8 relative z-10">
           <div className="bg-white/10 backdrop-blur-md border border-white/15 p-6 rounded-2xl max-w-md shadow-lg">
             <p className="text-sm font-semibold opacity-95 leading-relaxed">
-              &ldquo;UChat Video transformed our content pipeline. We went from producing two videos a week to ten, without compromising on quality or brand voice.&rdquo;
+              &ldquo;ThinkNEXT Video transformed our content pipeline. We went from producing two videos a week to ten, without compromising on quality or brand voice.&rdquo;
             </p>
             <div className="flex items-center gap-3 mt-4">
               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
@@ -86,7 +83,7 @@ export default function LoginPage() {
             </div>
           </div>
           <div className="text-xs font-semibold opacity-50">
-            &copy; 2024 UChat Video AI.
+            &copy; 2024 ThinkNEXT Video AI.
           </div>
         </div>
       </div>

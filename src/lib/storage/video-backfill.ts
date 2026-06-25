@@ -20,13 +20,14 @@ export async function fetchAndStoreVideo(
   projectId: string,
   providerVideoUrl: string,
   thumbnailUrl?: string | null,
+  customKey?: string,
 ): Promise<StoredVideo | null> {
   try {
     const res = await fetch(providerVideoUrl);
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
 
-    const r2Key = `videos/${workspaceId}/${projectId}.mp4`;
+    const r2Key = customKey || `videos/${workspaceId}/${projectId}.mp4`;
     const videoUrl = await uploadMedia(r2Key, buf, "video/mp4");
 
     let thumbnailR2Key: string | null = null;
@@ -36,7 +37,9 @@ export async function fetchAndStoreVideo(
         const tRes = await fetch(thumbnailUrl);
         if (tRes.ok) {
           const tBuf = await tRes.arrayBuffer();
-          thumbnailR2Key = `videos/${workspaceId}/${projectId}-thumbnail.jpg`;
+          thumbnailR2Key = customKey
+            ? `${customKey.replace(/\.[^/.]+$/, "")}-thumbnail.jpg`
+            : `videos/${workspaceId}/${projectId}-thumbnail.jpg`;
           storedThumbUrl = await uploadMedia(thumbnailR2Key, tBuf, "image/jpeg");
         }
       } catch {

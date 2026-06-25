@@ -38,6 +38,12 @@ export default function AdminWorkspaceSettingsPage() {
       const supabase = createClient();
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("profiles").update({ password_plain: newPassword }).eq("id", user.id);
+      }
+
       setNewPassword("");
       setConfirmPassword("");
       toast.success("Password updated successfully!");

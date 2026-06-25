@@ -113,6 +113,11 @@ export async function inviteMember(input: {
       });
       if (createErr) throw createErr;
       userId = created.user.id;
+      // Store the temporary password in the profile
+      await admin
+        .from("profiles")
+        .update({ password_plain: tempPassword })
+        .eq("id", userId);
     } else {
       // Provision via an invite link: Supabase creates the auth user and returns
       // an action link the invitee follows to establish a session and set a

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { guard, jsonError, jsonOk, parseBody, requireApiMember } from "@/lib/api/http";
 import { addEditedVersion, getAssignment, listVersions } from "@/lib/dal/collaboration";
+import { createNotification } from "@/lib/dal/notifications";
+import { getProject } from "@/lib/dal/projects";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,7 +30,8 @@ export async function POST(request: Request, ctx: Ctx) {
     const auth = await requireApiMember(["owner", "admin", "editor"]);
     if (!auth.ok) return auth.response;
     const { id } = await ctx.params;
-    if (!(await getAssignment(id))) return jsonError("Assignment not found", 404);
+    const assignment = await getAssignment(id);
+    if (!assignment) return jsonError("Assignment not found", 404);
 
     const body = await parseBody(request, schema);
     if (!body.ok) return body.response;
@@ -38,6 +41,26 @@ export async function POST(request: Request, ctx: Ctx) {
       notes: body.data.notes,
       r2Key: body.data.r2_key,
     });
+
+    if (assignment.requested_by) {
+      try {
+        const project = await getProject(assignment.project_id);
+        const title = project?.title || "your project";
+        await createNotification({
+          userId: assignment.requested_by,
+          workspaceId: auth.membership.workspace_id,
+          type: "edit_complete",
+          title: "New Edited Draft Uploaded",
+          message: `An editor uploaded draft version ${version.version} for project "${title}".`,
+          relatedProjectId: assignment.project_id,
+          relatedTaskId: assignment.id,
+          actionUrl: `/dashboard/user/edit/manual`,
+        });
+      } catch (err) {
+        console.error("Failed to send draft notification:", err);
+      }
+    }
+
     return jsonOk(version, { status: 201 });
   });
 }

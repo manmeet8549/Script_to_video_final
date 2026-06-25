@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
-import type { Notification, Project } from "@/types/db";
+import type { Notification, Project, EditingTask } from "@/types/db";
 
 function relTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -39,6 +39,7 @@ const PRIORITY_COLORS: Record<Project["priority"], string> = {
 export default function EditorDashboardPage() {
   const router = useRouter();
 
+  const [assignments, setAssignments] = useState<EditingTask[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,10 +47,12 @@ export default function EditorDashboardPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [projData, notifData] = await Promise.all([
+      const [assignmentsData, projData, notifData] = await Promise.all([
+        api.get<{ items: EditingTask[] }>("/api/assignments?mine=1"),
         api.get<Project[]>("/api/projects"),
         api.get<Notification[]>("/api/notifications"),
       ]);
+      setAssignments(assignmentsData.items || []);
       setProjects(projData);
       setNotifications(notifData);
     } catch (err) {
@@ -63,9 +66,13 @@ export default function EditorDashboardPage() {
     void (async () => { await load(); })();
   }, [load]);
 
-  const editingTasks = projects.filter((p) => p.status === "editing");
-  const reviewTasks = projects.filter((p) => p.status === "review");
-  const completedTasks = projects.filter((p) => p.status === "published");
+  const inProgressAssignments = assignments.filter(
+    (a) => a.status === "in_progress" || a.status === "revision_requested"
+  );
+  const reviewAssignments = assignments.filter((a) => a.status === "under_review");
+  const completedAssignments = assignments.filter(
+    (a) => a.status === "approved" || a.status === "completed"
+  );
 
   const recentActivity = notifications.slice(0, 5);
 
@@ -95,9 +102,9 @@ export default function EditorDashboardPage() {
         {/* KPI Cards Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { label: "In Progress", val: editingTasks.length, icon: "⏳", color: "text-amber-500 bg-amber-50/50" },
-            { label: "Under Review", val: reviewTasks.length, icon: "📝", color: "text-zinc-500 bg-zinc-50" },
-            { label: "Completed", val: completedTasks.length, icon: "✅", color: "text-emerald-500 bg-emerald-50/50" },
+            { label: "In Progress", val: inProgressAssignments.length, icon: "⏳", color: "text-amber-500 bg-amber-50/50" },
+            { label: "Under Review", val: reviewAssignments.length, icon: "📝", color: "text-zinc-500 bg-zinc-50" },
+            { label: "Completed", val: completedAssignments.length, icon: "✅", color: "text-emerald-500 bg-emerald-50/50" },
             { label: "Notifications", val: notifications.filter((n) => !n.is_read).length, icon: "🔔", color: "text-blue-500 bg-blue-50/50" },
           ].map((kpi, idx) => (
             <div
@@ -128,14 +135,14 @@ export default function EditorDashboardPage() {
                 Active Tasks
               </h3>
               <button
-                onClick={() => router.push("/dashboard/editor/tasks")}
+                onClick={() => router.push("/dashboard/editor/assignments?status=in_progress")}
                 className="text-xs font-bold text-brand-green hover:underline cursor-pointer"
               >
                 View All
               </button>
             </div>
 
-            {editingTasks.length === 0 ? (
+            {inProgressAssignments.length === 0 ? (
               <div className="py-12 text-center">
                 <CheckCircle size={32} className="text-brand-green mx-auto mb-2" />
                 <p className="text-sm font-bold text-zinc-600">No active editing tasks.</p>
@@ -145,54 +152,62 @@ export default function EditorDashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {editingTasks.slice(0, 4).map((p) => (
-                  <div
-                    key={p.id}
-                    onClick={() => router.push(`/dashboard/editor/tasks/${p.id}/edit`)}
-                    className="border border-zinc-150 rounded-2xl p-5 hover:border-zinc-350 hover:shadow-2xs transition-all text-left space-y-3 cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <span className={`inline-block px-1.5 py-0.5 border rounded text-[9px] font-extrabold ${PRIORITY_COLORS[p.priority]}`}>
-                          {p.priority.toUpperCase()}
+                {inProgressAssignments.slice(0, 4).map((a) => {
+                  const p = projects.find((proj) => proj.id === a.project_id);
+                  const title = p?.title || `Project ID: ${a.project_id.slice(0, 8)}`;
+                  const priority = p?.priority || "medium";
+                  const deadline = p?.deadline ?? null;
+                  const progress = p?.progress_percent ?? 0;
+
+                  return (
+                    <div
+                      key={a.id}
+                      onClick={() => router.push("/dashboard/editor/assignments?status=in_progress")}
+                      className="border border-zinc-150 rounded-2xl p-5 hover:border-zinc-350 hover:shadow-2xs transition-all text-left space-y-3 cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <span className={`inline-block px-1.5 py-0.5 border rounded text-[9px] font-extrabold ${PRIORITY_COLORS[priority]}`}>
+                            {priority.toUpperCase()}
+                          </span>
+                          <h4 className="text-xs font-extrabold text-zinc-900 leading-tight block pt-0.5">
+                            {title}
+                          </h4>
+                        </div>
+                        <span className="text-[10px] font-semibold text-zinc-400 shrink-0">
+                          {fmtDeadline(deadline)}
                         </span>
-                        <h4 className="text-xs font-extrabold text-zinc-900 leading-tight block pt-0.5">
-                          {p.title}
-                        </h4>
                       </div>
-                      <span className="text-[10px] font-semibold text-zinc-400 shrink-0">
-                        {fmtDeadline(p.deadline)}
-                      </span>
-                    </div>
 
-                    {p.progress_percent > 0 && (
-                      <div className="space-y-1 select-none">
-                        <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                          <div
-                            style={{ width: `${p.progress_percent}%` }}
-                            className="h-full bg-brand-green rounded-full"
-                          />
+                      {progress > 0 && (
+                        <div className="space-y-1 select-none">
+                          <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                            <div
+                              style={{ width: `${progress}%` }}
+                              className="h-full bg-brand-green rounded-full"
+                            />
+                          </div>
+                          <div className="flex justify-between text-[9px] font-bold text-zinc-400">
+                            <span>Progress</span>
+                            <span>{progress}%</span>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-[9px] font-bold text-zinc-400">
-                          <span>Progress</span>
-                          <span>{p.progress_percent}%</span>
-                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end pt-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push("/dashboard/editor/assignments?status=in_progress");
+                          }}
+                          className="h-8 px-4 bg-brand-green hover:bg-brand-green-hover text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          Open Editor <ArrowRight size={12} />
+                        </button>
                       </div>
-                    )}
-
-                    <div className="flex items-center justify-end pt-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/dashboard/editor/tasks/${p.id}/edit`);
-                        }}
-                        className="h-8 px-4 bg-brand-green hover:bg-brand-green-hover text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                      >
-                        Open Editor <ArrowRight size={12} />
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -210,16 +225,16 @@ export default function EditorDashboardPage() {
                   <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide block">
                     Tasks in Queue
                   </span>
-                  <span className="text-base font-extrabold text-zinc-850 block mt-1">
-                    {editingTasks.length + reviewTasks.length}
+                  <span className="text-base font-extrabold text-zinc-855 block mt-1">
+                    {inProgressAssignments.length + reviewAssignments.length}
                   </span>
                 </div>
                 <div className="bg-zinc-50 border border-zinc-150 rounded-xl p-3.5">
                   <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide block">
                     Completed
                   </span>
-                  <span className="text-base font-extrabold text-zinc-850 block mt-1">
-                    {completedTasks.length}
+                  <span className="text-base font-extrabold text-zinc-855 block mt-1">
+                    {completedAssignments.length}
                   </span>
                 </div>
               </div>

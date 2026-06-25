@@ -96,3 +96,53 @@ export async function broadcastNotifications(input: {
   const { error } = await admin.from("notifications").insert(rows);
   if (error) throw error;
 }
+
+export async function notifyAdmins(workspaceId: string, input: {
+  type: Notification["type"];
+  title: string;
+  message?: string | null;
+  relatedProjectId?: string | null;
+  actionUrl?: string | null;
+}): Promise<void> {
+  try {
+    const { listMembers } = require("@/lib/dal/members");
+    const members = await listMembers(workspaceId);
+    const adminIds = members
+      .filter((m: any) => m.role === "admin" || m.role === "owner")
+      .map((m: any) => m.user_id);
+
+    if (adminIds.length > 0) {
+      await broadcastNotifications({
+        userIds: adminIds,
+        workspaceId,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        relatedProjectId: input.relatedProjectId,
+        actionUrl: input.actionUrl,
+      });
+    }
+  } catch (err) {
+    console.error("notifyAdmins helper error:", err);
+  }
+}
+
+export async function notifyAdminsOnPublish(workspaceId: string | null | undefined, projectId: string): Promise<void> {
+  try {
+    const { getProject } = require("@/lib/dal/projects");
+    const project = await getProject(projectId);
+    const title = project?.title || "a project";
+    const resolvedWorkspaceId = workspaceId || project?.workspace_id;
+    if (resolvedWorkspaceId) {
+      await notifyAdmins(resolvedWorkspaceId, {
+        type: "publish_complete",
+        title: "Project Published",
+        message: `The project "${title}" has been successfully published.`,
+        relatedProjectId: projectId,
+        actionUrl: `/dashboard/admin/projects`,
+      });
+    }
+  } catch (err) {
+    console.error("notifyAdminsOnPublish helper error:", err);
+  }
+}
