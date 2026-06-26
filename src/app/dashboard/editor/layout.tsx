@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarUserCard, TopbarUserMenu } from "@/components/sidebar-user-card";
+import BackButton from "@/components/back-button";
 import { api } from "@/lib/api/client";
 
 function EditorLayoutInner({ children }: { children: React.ReactNode }) {
@@ -167,9 +168,12 @@ function EditorLayoutInner({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar Navigation */}
         <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-between shrink-0 select-none z-45">
-          <div className="flex items-center gap-2 text-xs font-bold text-zinc-450 uppercase tracking-wider">
-            <Pen size={14} className="text-brand-green" />
-            <span>{workspaceName ?? ""}</span>
+          <div className="flex items-center gap-3">
+            <BackButton />
+            <div className="flex items-center gap-2 text-xs font-bold text-zinc-450 uppercase tracking-wider">
+              <Pen size={14} className="text-brand-green" />
+              <span>{workspaceName ?? ""}</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
 import SubmagicEditDrawer from "@/components/SubmagicEditDrawer";
 import type { Project, EditingTask } from "@/types/db";
+import { progressFromStatus } from "@/lib/ui/project-view";
 
 type ProjectWithEdit = Project & { editTask: EditingTask | null };
 
@@ -192,7 +193,7 @@ export default function EditWithAIPage() {
                       {p.title}
                     </h3>
                     <p className="text-xs font-semibold text-zinc-400">
-                      Progress: {p.progress_percent}%
+                      Progress: {progressFromStatus(p.status)}%
                     </p>
                   </div>
 

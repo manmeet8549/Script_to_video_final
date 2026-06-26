@@ -11,6 +11,7 @@ import {
   Mail,
   MoreVertical,
   Plus,
+  Trash2,
   User,
   UserCheck,
   X,
@@ -69,6 +70,24 @@ export default function AdminTeamPage() {
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<"user" | "editor">("user");
   const [isInviting, setIsInviting] = useState(false);
+
+  // Remove confirmation
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  const handleRemove = async (memberId: string) => {
+    setIsRemoving(true);
+    try {
+      await api.del(`/api/members/${memberId}`);
+      toast.success("Member removed.");
+      setRemovingId(null);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to remove member.");
+    } finally {
+      setIsRemoving(false);
+    }
+  };
 
   // Success dialog
   const [successData, setSuccessData] = useState<{
@@ -492,9 +511,33 @@ export default function AdminTeamPage() {
                         }`}
                       />
                     </div>
-                    <button className="p-1.5 text-zinc-400 hover:text-zinc-600 rounded-lg transition-colors cursor-pointer">
-                      <MoreVertical size={16} />
-                    </button>
+                    {(member.role === "user" || member.role === "editor") && (
+                      removingId === member.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleRemove(member.id)}
+                            disabled={isRemoving}
+                            className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold rounded-lg cursor-pointer disabled:opacity-60"
+                          >
+                            {isRemoving ? <Loader2 size={10} className="animate-spin" /> : "Confirm"}
+                          </button>
+                          <button
+                            onClick={() => setRemovingId(null)}
+                            className="px-2 py-1 border border-zinc-200 text-zinc-500 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-zinc-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setRemovingId(member.id)}
+                          className="p-1.5 text-zinc-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
+                          title="Remove member"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )
+                    )}
                   </div>
 
                   <div className="text-left space-y-1.5">
@@ -631,12 +674,41 @@ export default function AdminTeamPage() {
                       </td>
                       <td className="p-4">{fmtJoined(member.created_at)}</td>
                       <td className="p-4 text-right">
-                        <button
-                          onClick={() => setSelectedMemberForProfile(member)}
-                          className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold rounded-lg cursor-pointer"
-                        >
-                          View
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedMemberForProfile(member)}
+                            className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold rounded-lg cursor-pointer"
+                          >
+                            View
+                          </button>
+                          {(member.role === "user" || member.role === "editor") && (
+                            removingId === member.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleRemove(member.id)}
+                                  disabled={isRemoving}
+                                  className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold rounded-lg cursor-pointer disabled:opacity-60"
+                                >
+                                  {isRemoving ? <Loader2 size={10} className="animate-spin" /> : "Confirm"}
+                                </button>
+                                <button
+                                  onClick={() => setRemovingId(null)}
+                                  className="px-2 py-1 border border-zinc-200 text-zinc-500 text-[10px] font-bold rounded-lg cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setRemovingId(member.id)}
+                                className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors cursor-pointer rounded-lg"
+                                title="Remove member"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

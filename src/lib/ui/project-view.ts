@@ -1,5 +1,21 @@
 import type { Project, ProjectStatus } from "@/types/db";
 
+// Derives display progress from project status. Video completion = 100%;
+// editing reopens the project so it drops back to 75%.
+export function progressFromStatus(status: ProjectStatus): number {
+  const MAP: Record<ProjectStatus, number> = {
+    idea: 10,
+    scripting: 30,
+    voice_gen: 55,
+    video_gen: 100,
+    editing: 75,
+    review: 90,
+    published: 100,
+    archived: 100,
+  };
+  return MAP[status] ?? 0;
+}
+
 // View model the project cards/list render. Maps the normalized DB project into
 // the labels/colors the existing UI expects.
 export type ProjectCardView = {
@@ -86,7 +102,7 @@ export function mapProjectToCard(p: Project): ProjectCardView {
     statusColor,
     stage: STAGE_LABEL[p.status],
     dueDate: formatDue(p.deadline),
-    progress: p.progress_percent,
+    progress: progressFromStatus(p.status),
     created: new Date(p.created_at).toLocaleDateString("en-US", {
       month: "short",
       day: "2-digit",

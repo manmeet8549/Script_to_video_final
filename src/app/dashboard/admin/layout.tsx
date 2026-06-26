@@ -7,8 +7,6 @@ import {
   LayoutDashboard,
   FolderKanban,
   Users,
-  User,
-  PenTool,
   CalendarDays,
   Settings,
   Bell,
@@ -18,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarUserCard, TopbarUserMenu } from "@/components/sidebar-user-card";
+import BackButton from "@/components/back-button";
 import { api } from "@/lib/api/client";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -25,8 +24,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [projectsCount, setProjectsCount] = useState<number | null>(null);
   const [membersCount, setMembersCount] = useState<number | null>(null);
-  const [usersCount, setUsersCount] = useState<number | null>(null);
-  const [editorsCount, setEditorsCount] = useState<number | null>(null);
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -43,8 +40,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           api.get<Notification[]>("/api/notifications").catch(() => [] as Notification[]),
         ]);
         setMembersCount(members.length);
-        setUsersCount(members.filter((m) => m.role === "user").length);
-        setEditorsCount(members.filter((m) => m.role === "editor").length);
         setProjectsCount(projects.length);
         setUnreadCount(notifs.filter((n) => !n.is_read).length);
         if (workspaces.length > 0) setWorkspaceName(workspaces[0].name);
@@ -77,8 +72,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: "All Projects", href: "/dashboard/admin/projects", icon: <FolderKanban size={16} />, badge: projectsCount !== null ? String(projectsCount) : undefined },
     { category: "TEAM" },
     { label: "All Members", href: "/dashboard/admin/team", icon: <Users size={16} />, badge: membersCount !== null ? String(membersCount) : undefined },
-    { label: "Users", href: "/dashboard/admin/team/users", icon: <User size={16} />, badge: usersCount !== null ? String(usersCount) : undefined },
-    { label: "Editors", href: "/dashboard/admin/team/editors", icon: <PenTool size={16} />, badge: editorsCount !== null ? String(editorsCount) : undefined },
     { category: "PUBLISHING" },
     { label: "Approval Queue", href: "/dashboard/admin/approvals", icon: <CheckSquare size={16} /> },
     { category: "BILLING" },
@@ -172,9 +165,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar Navigation */}
         <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-between shrink-0 select-none z-40">
-          <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-            <Shield size={14} className="text-brand-green" />
-            <span>ADMIN{workspaceName ? `: ${workspaceName}` : ""}</span>
+          <div className="flex items-center gap-3">
+            <BackButton />
+            <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              <Shield size={14} className="text-brand-green" />
+              <span>ADMIN{workspaceName ? `: ${workspaceName}` : ""}</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">

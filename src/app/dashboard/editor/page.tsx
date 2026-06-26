@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
 import type { Notification, Project, EditingTask } from "@/types/db";
+import { progressFromStatus } from "@/lib/ui/project-view";
 
 function relTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -157,7 +158,7 @@ export default function EditorDashboardPage() {
                   const title = p?.title || `Project ID: ${a.project_id.slice(0, 8)}`;
                   const priority = p?.priority || "medium";
                   const deadline = p?.deadline ?? null;
-                  const progress = p?.progress_percent ?? 0;
+                  const progress = p ? progressFromStatus(p.status) : 0;
 
                   return (
                     <div

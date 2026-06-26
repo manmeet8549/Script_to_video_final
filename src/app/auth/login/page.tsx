@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, User, Play, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { signIn } from "@/app/auth/actions";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +14,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Surface OAuth failures bounced back from /auth/callback.
+  useEffect(() => {
+    const err = new URLSearchParams(window.location.search).get("error");
+    if (err) toast.error(err);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,8 +48,13 @@ export default function LoginPage() {
     router.refresh();
   };
 
-  const handleGoogleLogin = () => {
-    toast.info("Google sign-in isn't configured yet. Use email and password.");
+  const handleGoogleLogin = async () => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) toast.error(error.message);
   };
 
   return (

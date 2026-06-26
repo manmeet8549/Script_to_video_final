@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
+import { progressFromStatus } from "@/lib/ui/project-view";
 import type { Project } from "@/types/db";
 
 type TaskStatus = "editing" | "review";
@@ -173,17 +174,14 @@ function TasksListContent() {
                   </div>
                 </div>
 
-                {p.progress_percent > 0 && (
+                {(() => { const pct = progressFromStatus(p.status); return pct > 0 && (
                   <div className="space-y-1 select-none">
                     <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                      <div
-                        style={{ width: `${p.progress_percent}%` }}
-                        className="h-full bg-brand-green rounded-full"
-                      />
+                      <div style={{ width: `${pct}%` }} className="h-full bg-brand-green rounded-full" />
                     </div>
-                    <span className="text-[9px] font-bold text-zinc-400 block">{p.progress_percent}% complete</span>
+                    <span className="text-[9px] font-bold text-zinc-400 block">{pct}% complete</span>
                   </div>
-                )}
+                ); })()}
 
                 <hr className="border-zinc-100" />
 

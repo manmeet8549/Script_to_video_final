@@ -26,6 +26,13 @@ import SendToEditorModal from "@/components/SendToEditorModal";
 type Voice = { id: string; name: string; description?: string; gender?: string };
 type Avatar = { id: string; name: string; preview_image_url: string; preview_video_url?: string; description?: string };
 
+// Format slider seconds as "M:SS minutes" for display and the script prompt.
+function fmtDuration(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")} minutes`;
+}
+
 const STEPS = ["Idea", "Script", "Voice", "Avatar", "Export"] as const;
 const ASPECTS: { id: "16:9" | "9:16" | "1:1"; label: string; box: string }[] = [
   { id: "16:9", label: "Landscape", box: "aspect-video" },
@@ -41,9 +48,10 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
   const [topic, setTopic] = useState("");
   const [audience, setAudience] = useState("");
   const [tone, setTone] = useState("Educational, Optimistic");
-  const [duration, setDuration] = useState("");
+  const [durationSec, setDurationSec] = useState(60); // 0:10–5:00, default 1:00
   const [language, setLanguage] = useState<"english" | "hindi" | "hinglish">("english");
   const [generatingScript, setGeneratingScript] = useState(false);
+  const [scriptIsManual, setScriptIsManual] = useState(false);
 
   // Step 2 — script
   const [script, setScript] = useState("");
@@ -122,7 +130,7 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
         topic,
         tone,
         language,
-        target_duration: duration || undefined,
+        target_duration: fmtDuration(durationSec),
         instructions: audience ? `Target audience: ${audience}` : undefined,
       });
       setScript(res.content);
@@ -142,7 +150,7 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
         content: script,
         tone,
         language: language === "english" ? "en" : language,
-        ai_generated: true,
+        ai_generated: !scriptIsManual,
       });
       setStep(3);
     } catch (err) {
@@ -357,10 +365,30 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
               className="w-full resize-none rounded-xl border border-zinc-200 p-3 text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20"
             />
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Target Audience" value={audience} onChange={setAudience} placeholder="Tech Enthusiasts" />
             <Field label="Tone / Style" value={tone} onChange={setTone} placeholder="Educational" />
-            <Field label="Est. Duration" value={duration} onChange={setDuration} placeholder="~3:45 minutes" />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wide text-zinc-400">Est. Duration</label>
+              <span className="rounded-full bg-brand-green-light px-2.5 py-0.5 text-xs font-bold text-brand-green tabular-nums">
+                {fmtDuration(durationSec)}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={10}
+              max={300}
+              step={10}
+              value={durationSec}
+              onChange={(e) => setDurationSec(Number(e.target.value))}
+              className="w-full accent-brand-green cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] font-bold text-zinc-400">
+              <span>0:10</span>
+              <span>5:00</span>
+            </div>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wide text-zinc-400">Language</label>
@@ -378,14 +406,24 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
               ))}
             </div>
           </div>
-          <button
-            onClick={generateScript}
-            disabled={generatingScript}
-            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-green px-8 text-sm font-bold text-white shadow-sm transition-all hover:bg-brand-green-hover active:scale-[0.99] disabled:opacity-60 cursor-pointer"
-          >
-            {generatingScript ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {generatingScript ? "Generating…" : "Generate Script"}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={generateScript}
+              disabled={generatingScript}
+              className="flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-green px-8 text-sm font-bold text-white shadow-sm transition-all hover:bg-brand-green-hover active:scale-[0.99] disabled:opacity-60 cursor-pointer"
+            >
+              {generatingScript ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {generatingScript ? "Generating…" : "Generate Script"}
+            </button>
+            <span className="text-xs text-zinc-350 select-none">or</span>
+            <button
+              type="button"
+              onClick={() => { setScript(""); setScriptIsManual(true); setStep(2); }}
+              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-zinc-200 px-6 text-sm font-bold text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 transition-colors cursor-pointer"
+            >
+              Write manually
+            </button>
+          </div>
         </div>
       )}
 
@@ -393,7 +431,7 @@ export default function ProjectPipeline({ projectId }: { projectId: string }) {
       {step === 2 && (
         <div className="space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-zinc-900">Review your script</h2>
+            <h2 className="text-lg font-bold text-zinc-900">{scriptIsManual ? "Write your script" : "Review your script"}</h2>
             <span className="rounded-full bg-brand-green-light px-2.5 py-0.5 text-[10px] font-bold text-brand-green">
               {script.trim().split(/\s+/).filter(Boolean).length} words
             </span>

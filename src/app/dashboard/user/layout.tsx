@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarUserCard } from "@/components/sidebar-user-card";
+import BackButton from "@/components/back-button";
 import { api } from "@/lib/api/client";
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
@@ -127,7 +128,8 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
       {/* Main Content Pane */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar Navigation */}
-        <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-end shrink-0 select-none z-45">
+        <header className="h-16 border-b border-sidebar-border bg-white px-8 flex items-center justify-between shrink-0 select-none z-45">
+          <BackButton />
           {/* Right items */}
           <div className="flex items-center gap-4">
             <Link

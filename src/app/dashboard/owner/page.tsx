@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Bell,
   ChevronRight,
   Loader2,
   MoreVertical,
@@ -15,18 +14,6 @@ import { api, ApiError } from "@/lib/api/client";
 import type { Notification, Workspace, WorkspaceMember } from "@/types/db";
 
 type WorkspaceWithRole = Workspace & { role: WorkspaceMember["role"] };
-
-function relTime(iso: string): string {
-  const delta = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(delta / 1000);
-  if (s < 60) return "just now";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
 
 export default function OwnerDashboardPage() {
   const router = useRouter();
@@ -90,7 +77,6 @@ export default function OwnerDashboardPage() {
   const archivedWorkspaces = workspaces.filter((ws) => ws.status === "archived");
   const attentionWorkspaces = [...suspendedWorkspaces, ...archivedWorkspaces].slice(0, 5);
   const unreadNotifs = notifications.filter((n) => !n.is_read).length;
-  const activityLog = notifications.slice(0, 5);
 
   if (loading) {
     return (
@@ -227,7 +213,7 @@ export default function OwnerDashboardPage() {
           {/* Main Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Workspaces Requiring Attention */}
-            <div className="lg:col-span-7 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="lg:col-span-12 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-100 pb-3 select-none">
                 <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide">
                   Workspaces Requiring Attention
@@ -282,47 +268,6 @@ export default function OwnerDashboardPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-            </div>
-
-            {/* Recent Activity */}
-            <div className="lg:col-span-5 bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex justify-between items-center border-b border-zinc-100 pb-2 select-none">
-                <h3 className="text-sm font-extrabold text-zinc-800 uppercase tracking-wide">
-                  Recent Activity
-                </h3>
-                <button
-                  onClick={() => router.push("/dashboard/owner/notifications")}
-                  className="text-xs font-bold text-brand-green hover:underline cursor-pointer"
-                >
-                  View All
-                </button>
-              </div>
-
-              {activityLog.length === 0 ? (
-                <div className="flex items-center gap-2 py-4">
-                  <Bell size={16} className="text-zinc-300" />
-                  <p className="text-xs font-semibold text-zinc-400">No recent activity.</p>
-                </div>
-              ) : (
-                <div className="space-y-4 text-left select-none">
-                  {activityLog.map((n) => (
-                    <div key={n.id} className="flex items-start gap-3 p-1 rounded-lg hover:bg-zinc-50 transition-colors">
-                      <div className={`w-7 h-7 border flex items-center justify-center text-xs rounded-lg shrink-0 shadow-3xs ${
-                        n.is_read ? "bg-zinc-100 border-zinc-200 text-zinc-500" : "bg-brand-green-light border-brand-green/20 text-brand-green"
-                      }`}>
-                        🔔
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-zinc-900 leading-tight truncate">{n.title}</p>
-                        {n.message && (
-                          <p className="text-[10px] font-semibold text-zinc-500 mt-0.5 truncate">{n.message}</p>
-                        )}
-                        <span className="text-[9px] font-bold text-zinc-400 block mt-1">{relTime(n.created_at)}</span>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>

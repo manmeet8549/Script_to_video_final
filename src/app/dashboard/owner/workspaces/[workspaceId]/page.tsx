@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api/client";
+import { progressFromStatus } from "@/lib/ui/project-view";
 import type {
   Workspace,
   WorkspaceMember,
@@ -665,7 +666,7 @@ export default function OwnerWorkspaceDetailPage() {
                     {p.status}
                   </span>
                   <span className="text-[10px] font-semibold text-zinc-400">
-                    {p.progress_percent}%
+                    {progressFromStatus(p.status)}%
                   </span>
                 </div>
                 <h4 className="text-sm font-extrabold text-zinc-950 leading-tight">{p.title}</h4>

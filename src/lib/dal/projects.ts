@@ -146,10 +146,16 @@ export async function setStageStatus(
     .single();
   if (error) throw error;
 
-  // Recompute coarse progress from completed stages.
-  const stages = await getProjectStages(projectId);
-  const completed = stages.filter((s) => s.status === "completed").length;
-  const progress = Math.round((completed / STAGE_ORDER.length) * 100);
+  // Map the current stage + transition to a meaningful progress value.
+  // Video done = 100%; editing (post-video rework) drops back to 75%.
+  const STAGE_PROGRESS: Record<StageName, number> = {
+    idea: 10, script: 30, voice: 55,
+    video: status === "completed" ? 100 : 80,
+    editing: status === "completed" ? 90 : 75,
+    review: 90,
+    publish: 100,
+  };
+  const progress = STAGE_PROGRESS[stageName] ?? 0;
   await supabase.from("projects").update({ progress_percent: progress }).eq("id", projectId);
 
   return data;

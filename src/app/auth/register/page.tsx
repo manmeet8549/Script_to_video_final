@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, Play, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { registerWithWorkspace } from "@/app/auth/actions";
+import { createClient } from "@/lib/supabase/client";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -80,8 +81,13 @@ export default function RegisterPage() {
     router.refresh();
   };
 
-  const handleGoogleSignup = () => {
-    toast.info("Google sign-up isn't configured yet. Use email and password.");
+  const handleGoogleSignup = async () => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) toast.error(error.message);
   };
 
   return (
